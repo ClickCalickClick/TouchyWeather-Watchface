@@ -97,6 +97,18 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
     settings_set_quick_view_reflow(prv_tuple_bool(t));
     config_changed = true;
   }
+  if ((t = dict_find(iter, MESSAGE_KEY_TapInputMode))) {
+    settings_set_tap_input_mode((TapInputMode)prv_tuple_int(t));
+    config_changed = true;
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_BatteryDisplay))) {
+    settings_set_battery_display((BatteryDisplay)prv_tuple_int(t));
+    config_changed = true;
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_Complication))) {
+    settings_set_complication((ComplicationSlot)prv_tuple_int(t));
+    config_changed = true;
+  }
   if ((t = dict_find(iter, MESSAGE_KEY_UseDewPoint))) {
     bool on = prv_tuple_bool(t);
     settings_set_use_dew_point(on);

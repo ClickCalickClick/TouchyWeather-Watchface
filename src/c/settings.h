@@ -21,6 +21,35 @@ typedef enum {
   PAGE_COUNT = 4,
 } FacePage;
 
+// Which physical nudge drives the deck. Both come from AccelTapService —
+// the only non-touch input a watchface gets — discriminated by axis.
+// A wrist flick lands on X/Y (arm rotation); a tap on the watch body/face
+// lands on Z (perpendicular impact). "Either" accepts any axis (the most
+// reliable, since axis discrimination is imperfect on real hardware).
+typedef enum {
+  TAP_INPUT_WRIST = 0,  // wrist flick — X/Y axis (default)
+  TAP_INPUT_TAP = 1,    // tap the watch — Z axis
+  TAP_INPUT_EITHER = 2, // any axis (reliability fallback)
+} TapInputMode;
+
+// Persistent battery indicator on the resting face.
+typedef enum {
+  BATTERY_OFF = 0,
+  BATTERY_ALWAYS = 1,   // default
+  BATTERY_WHEN_LOW = 2, // only at <=20%
+} BatteryDisplay;
+
+// The one configurable complication slot on the resting face.
+typedef enum {
+  COMPLICATION_OFF = 0, // default — keep the face clean
+  COMPLICATION_FEELS = 1,
+  COMPLICATION_WIND = 2,
+  COMPLICATION_HUMIDITY = 3,
+  COMPLICATION_UV = 4,
+  COMPLICATION_AQI = 5,
+  COMPLICATION_STEPS = 6,
+} ComplicationSlot;
+
 void settings_init(void);
 
 // Compat shims for the copied modules. The face has no Big Mode; the
@@ -57,3 +86,12 @@ void settings_set_show_location(bool on);
 // at sunrise (night mode force-sets dark without clobbering this).
 int settings_get_day_theme(void);
 void settings_set_day_theme(int theme);
+
+TapInputMode settings_get_tap_input_mode(void);   // default TAP_INPUT_WRIST
+void settings_set_tap_input_mode(TapInputMode mode);
+
+BatteryDisplay settings_get_battery_display(void); // default BATTERY_ALWAYS
+void settings_set_battery_display(BatteryDisplay mode);
+
+ComplicationSlot settings_get_complication(void);  // default COMPLICATION_OFF
+void settings_set_complication(ComplicationSlot slot);

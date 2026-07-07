@@ -108,11 +108,20 @@ static void prv_touch_deinit(void) {}
 // --- Accel tap (the nudge) -------------------------------------------------
 
 static void prv_tap_handler(AccelAxisType axis, int32_t direction) {
-  (void)axis;
   (void)direction;
-  // Any-axis acceptance: real-wrist taps land on unpredictable axes, and
-  // every deck state times out safely back to the clock, so false positives
-  // are cheap and missed taps are the worse failure.
+  // AccelTapService is the only non-touch input a watchface gets. The Clay
+  // "nudge input" setting selects which physical motion counts, by axis:
+  //   wrist flick → arm rotation registers on X/Y
+  //   tap watch   → a perpendicular tap on the body/face registers on Z
+  // The discrimination is imperfect on real hardware, so EITHER accepts any
+  // axis as the reliability fallback. Every deck state times out safely to
+  // the clock, so an occasional false positive is cheap.
+  bool is_z = (axis == ACCEL_AXIS_Z);
+  switch (settings_get_tap_input_mode()) {
+    case TAP_INPUT_WRIST: if (is_z) return; break;   // want flick, got tap
+    case TAP_INPUT_TAP:   if (!is_z) return; break;  // want tap, got flick
+    case TAP_INPUT_EITHER: break;
+  }
   face_state_on_nudge();
 }
 

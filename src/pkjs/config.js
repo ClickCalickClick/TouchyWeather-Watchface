@@ -64,6 +64,54 @@ module.exports = [
           { "label": "Auto-rotate pages", "value": "2" },
           { "label": "Off (clock only)", "value": "3" }
         ]
+      },
+      {
+        "type": "select",
+        "messageKey": "TapInputMode",
+        "label": "Nudge input",
+        "description": "Which motion the face reacts to. Both use the accelerometer (a watchface can't use the touchscreen). Wrist flick reacts to turning your wrist; Tap reacts to tapping the watch face/body; Either accepts both (most reliable, but more prone to accidental triggers).",
+        "defaultValue": "0",
+        "options": [
+          { "label": "Wrist flick", "value": "0" },
+          { "label": "Tap the watch", "value": "1" },
+          { "label": "Either", "value": "2" }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Clock Face"
+      },
+      {
+        "type": "select",
+        "messageKey": "BatteryDisplay",
+        "label": "Battery indicator",
+        "defaultValue": "1",
+        "options": [
+          { "label": "Off", "value": "0" },
+          { "label": "Always show", "value": "1" },
+          { "label": "Only when low", "value": "2" }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "Complication",
+        "label": "Complication",
+        "description": "An extra reading shown on the clock face, below the date.",
+        "defaultValue": "0",
+        "options": [
+          { "label": "None", "value": "0" },
+          { "label": "Feels like", "value": "1" },
+          { "label": "Wind", "value": "2" },
+          { "label": "Humidity", "value": "3" },
+          { "label": "UV index", "value": "4" },
+          { "label": "Air quality", "value": "5" },
+          { "label": "Step count", "value": "6" }
+        ]
       }
     ]
   },

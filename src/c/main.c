@@ -145,6 +145,11 @@ static void prv_unobstructed_change(AnimationProgress progress, void *ctx) {
   prv_mark_dirty();
 }
 
+static void prv_battery_handler(BatteryChargeState state) {
+  (void)state;
+  prv_mark_dirty();  // redraw the battery glyph on charge/plug changes
+}
+
 static void prv_window_load(Window *window) {
   Layer *root = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(root);
@@ -192,10 +197,12 @@ static void prv_init(void) {
   comm_init();
 
   tick_timer_service_subscribe(MINUTE_UNIT, prv_tick_handler);
+  battery_state_service_subscribe(prv_battery_handler);
 }
 
 static void prv_deinit(void) {
   tick_timer_service_unsubscribe();
+  battery_state_service_unsubscribe();
   if (s_banner_timer) {
     app_timer_cancel(s_banner_timer);
     s_banner_timer = NULL;

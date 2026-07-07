@@ -17,6 +17,21 @@ cards: **6 Hours → Week Ahead → Conditions → Sun + Moon**, then back to th
 clock. It also auto-returns after ~7 s. Gesture behavior is configurable
 (Nudge Deck / Single peek overlay / Auto-rotate / Off).
 
+## Customization (Clay)
+
+- **Nudge input** — which motion drives the deck: **Wrist flick** (default),
+  **Tap the watch**, or **Either**. Both come from the accelerometer (a
+  watchface can't use the touchscreen); they're told apart by axis — a flick
+  registers on X/Y, a tap on Z. Discrimination is approximate on real
+  hardware, so *Either* is the reliable fallback.
+- **Battery indicator** — Off / Always / Only when low. A small pill top-of-face,
+  orange when low, with a charging bolt.
+- **Complication** — one extra reading below the date: feels-like, wind,
+  humidity, UV, air quality, or step count.
+- Plus theme, forecast time format, gesture mode, peek-page toggles, ambient
+  extras (rain auto-peek, night mode, UV badge, Quick View reflow), units,
+  and location override.
+
 ## Interactions & the touch story
 
 Watch faces on current Pebble firmware **cannot receive touch_service

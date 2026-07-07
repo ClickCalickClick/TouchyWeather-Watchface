@@ -83,6 +83,76 @@ static void prv_draw_hilo(GContext *ctx, int x, int y, int w) {
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 }
 
+// Battery pill in the top area, per the BatteryDisplay setting. Rect classes
+// get a top-right corner; round classes a top-center glyph clear of the
+// bezel curve. `bounds` is the full face rect.
+static void prv_draw_battery(GContext *ctx, GRect bounds) {
+  BatteryDisplay mode = settings_get_battery_display();
+  if (mode == BATTERY_OFF) return;
+  BatteryChargeState bat = battery_state_service_peek();
+  if (mode == BATTERY_WHEN_LOW && bat.charge_percent > 20 && !bat.is_charging) {
+    return;
+  }
+  int ox = bounds.origin.x, oy = bounds.origin.y, W = bounds.size.w;
+  const int bw = 20;
+  GPoint c;
+#if defined(UI_SCREEN_SMALL_RECT)
+  c = GPoint(ox + W - UI_MARGIN_X - bw / 2 - 2, oy + 10);
+#elif defined(UI_SCREEN_SMALL_ROUND)
+  c = GPoint(ox + W / 2, oy + 13);
+#elif defined(UI_SCREEN_LARGE_RECT)
+  c = GPoint(ox + W / 2, oy + 8);
+#else  // UI_SCREEN_LARGE_ROUND
+  c = GPoint(ox + W / 2, oy + 22);
+#endif
+  icon_draw_battery(ctx, c, bw, bat.charge_percent, bat.is_charging,
+                    theme_secondary(), theme_accent_orange());
+}
+
+// The one configurable complication line, centered in `slot` (a thin rect
+// between the date and the weather row).
+static void prv_draw_complication(GContext *ctx, GRect slot) {
+  ComplicationSlot which = settings_get_complication();
+  if (which == COMPLICATION_OFF) return;
+  WeatherData *d = weather_data_get();
+  char buf[24];
+  GColor color = theme_secondary();
+  switch (which) {
+    case COMPLICATION_FEELS:
+      snprintf(buf, sizeof(buf), "FEELS %d°", d->feels_like);
+      break;
+    case COMPLICATION_WIND:
+      snprintf(buf, sizeof(buf), "WIND %d %s", d->wind_speed, d->wind_dir);
+      break;
+    case COMPLICATION_HUMIDITY:
+      snprintf(buf, sizeof(buf), "HUMIDITY %d%%", d->humidity);
+      break;
+    case COMPLICATION_UV:
+      snprintf(buf, sizeof(buf), "UV %d %s", d->uv, uv_label(d->uv));
+      color = theme_accent_orange();
+      break;
+    case COMPLICATION_AQI:
+      snprintf(buf, sizeof(buf), "AIR %d %s", d->aqi, aqi_label(d->aqi));
+      color = theme_accent_blue();
+      break;
+    case COMPLICATION_STEPS: {
+#if defined(PBL_HEALTH)
+      int steps = (int)health_service_sum_today(HealthMetricStepCount);
+      snprintf(buf, sizeof(buf), "%d STEPS", steps);
+#else
+      return;  // no health service on this platform
+#endif
+      break;
+    }
+    default:
+      return;
+  }
+  graphics_context_set_text_color(ctx, color);
+  graphics_draw_text(ctx, buf, ui_font_label(), slot,
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter,
+                     NULL);
+}
+
 void clock_zone_draw_full(GContext *ctx, GRect bounds) {
   WeatherData *d = weather_data_get();
   int W = bounds.size.w;
@@ -90,27 +160,35 @@ void clock_zone_draw_full(GContext *ctx, GRect bounds) {
   int oy = bounds.origin.y;
 
   // Per-screen-class vertical anchors. Weather row: icon | temp | hi-lo.
+  // comp_y = the optional complication line, tucked between date and row.
 #if defined(UI_SCREEN_SMALL_RECT)
   int time_y = 6,  time_h = 42;
   int date_y = 50;
-  int row_y  = 84;
+  int comp_y = 68;
+  int row_y  = 86;
   int icon_size = 30;
 #elif defined(UI_SCREEN_SMALL_ROUND)
   int time_y = 22, time_h = 48;
   int date_y = 70;
-  int row_y  = 100;
+  int comp_y = 90;
+  int row_y  = 102;
   int icon_size = 32;
 #elif defined(UI_SCREEN_LARGE_RECT)
   int time_y = 18, time_h = 48;
   int date_y = 70;
-  int row_y  = 112;
+  int comp_y = 94;
+  int row_y  = 114;
   int icon_size = 38;
 #else  // UI_SCREEN_LARGE_ROUND
   int time_y = 40, time_h = 48;
   int date_y = 92;
-  int row_y  = 140;
+  int comp_y = 118;
+  int row_y  = 142;
   int icon_size = 40;
 #endif
+
+  // Battery glyph (top area) — drawn first so it sits behind nothing.
+  prv_draw_battery(ctx, GRect(ox, oy, W, bounds.size.h));
 
   // Big time, centered. ui_font_number() = LECO (digits + ':' only — the
   // degree/minus limitation doesn't matter here).
@@ -125,6 +203,9 @@ void clock_zone_draw_full(GContext *ctx, GRect bounds) {
                      GRect(ox, oy + date_y, W, 22),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter,
                      NULL);
+
+  // Optional complication line, between the date and the weather row.
+  prv_draw_complication(ctx, GRect(ox, oy + comp_y, W, 18));
 
   // Weather row: animated condition icon | big temp | hi-lo column,
   // laid out as one centered cluster.

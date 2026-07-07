@@ -1,7 +1,7 @@
 {
   "name": "TouchyWeatherFace",
   "author": "MakeAwesomeHappen",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "keywords": [
     "pebble-watchface"
   ],
@@ -15,7 +15,8 @@
     "sdkVersion": "3",
     "enableMultiJS": true,
     "capabilities": [
-      "configurable"
+      "configurable",
+      "health"
     ],
     "targetPlatforms": [
       "basalt",
@@ -48,6 +49,9 @@
       "NightMode",
       "UVBadge",
       "QuickViewReflow",
+      "TapInputMode",
+      "BatteryDisplay",
+      "Complication",
       "Temp",
       "FeelsLike",
       "High",
