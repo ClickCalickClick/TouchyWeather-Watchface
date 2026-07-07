@@ -96,6 +96,87 @@ function xhr(url, cb) {
   req.send();
 }
 
+// ----------------------------------------------------------------------
+// Anonymous active-user analytics (ported from the TouchyWeather app).
+//
+// Identifies the user by Pebble's account token — a stable, per-user,
+// per-app value containing no name/email/PII. When that's unavailable
+// (user not signed in) we fall back to a random id persisted locally.
+// The raw id is sent over HTTPS and hashed server-side; only aggregate
+// DAU/WAU/MAU/YAU counts + a coarse (~11 km) location cell are stored.
+// Throttled to one ping per UTC day so "daily active" is the natural unit.
+// Fire-and-forget: failures never affect weather. The `variant: 'face'`
+// tag lets the dashboard tell face users apart from app users (the app
+// sends 'app'); see proxy/api/track.js.
+// ----------------------------------------------------------------------
+
+// Anonymous analytics ping. Same Vercel project + RADAR_SECRET auth key as
+// the app's radar/pollen/track endpoints. The server hashes the id and stores
+// only aggregate counts — nothing identifiable leaves the device.
+// The key lives in gitignored secrets.js (template: secrets.js.example);
+// without it the ping just 401s and analytics is silently skipped.
+var PROXY_KEY = require('./secrets').PROXY_KEY;
+var TRACK_PROXY_URL = 'https://touchyweather-radar-proxy.vercel.app/api/track' +
+  (PROXY_KEY ? '?key=' + PROXY_KEY : '');
+
+function utcDayStr() {
+  var d = new Date();
+  function p(n) { return n < 10 ? '0' + n : '' + n; }
+  return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate());
+}
+
+function getAnalyticsId() {
+  // Prefer the anonymous Pebble account token (consistent across the same
+  // user's watches). It can be '' when the user isn't signed in.
+  var token = '';
+  try { token = Pebble.getAccountToken() || ''; } catch (e) { token = ''; }
+  if (token) return token;
+
+  // Fallback: a locally persisted random id so an unsigned-in user still
+  // counts as one stable device rather than a new user every launch.
+  var anon = localStorage.getItem('anonId');
+  if (!anon) {
+    anon = 'anon-';
+    for (var i = 0; i < 32; i++) {
+      anon += Math.floor(Math.random() * 16).toString(16);
+    }
+    localStorage.setItem('anonId', anon);
+  }
+  return anon;
+}
+
+function trackPing(lat, lon) {
+  var today = utcDayStr();
+  if (localStorage.getItem('lastPingDay') === today) return; // already counted today
+
+  var id = getAnalyticsId();
+  // Round coords to 0.1° (~11 km) before they leave the device — analytics
+  // never needs precise location, only a coarse heatmap cell.
+  var rLat = Math.round(lat * 10) / 10;
+  var rLon = Math.round(lon * 10) / 10;
+
+  try {
+    var req = new XMLHttpRequest();
+    req.open('POST', TRACK_PROXY_URL, true);
+    req.timeout = 15000;
+    req.setRequestHeader('Content-Type', 'application/json');
+    req.onload = function() {
+      if (req.status >= 200 && req.status < 300) {
+        // Mark the day done only on success so a failed ping retries next refresh.
+        localStorage.setItem('lastPingDay', today);
+        console.log('track sent');
+      } else {
+        console.log('track http ' + req.status);
+      }
+    };
+    req.onerror = function() { console.log('track err'); };
+    req.ontimeout = function() { console.log('track timeout'); };
+    req.send(JSON.stringify({ id: id, lat: rLat, lon: rLon, variant: 'face' }));
+  } catch (e) {
+    console.log('track exception: ' + e.message);
+  }
+}
+
 // Best-effort reverse geocode (BigDataCloud, keyless), cached by ~1.1km
 // cell for 24h. Always calls `done` with a string; never blocks weather.
 var GEO_TTL_MS = 24 * 60 * 60 * 1000;
@@ -272,6 +353,7 @@ function fetchWeather(lat, lon) {
         function() {
           console.log('weather sent');
           localStorage.setItem('lastFetchAt', String(Date.now()));
+          trackPing(lat, lon); // anonymous once-per-day active-user ping
           fetchDone();
         },
         function(e) {

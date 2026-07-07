@@ -17,6 +17,9 @@ node_modules/
 .env.*
 *.env.local
 
+# Proxy key — never commit (template: src/pkjs/secrets.js.example)
+src/pkjs/secrets.js
+
 # Screenshots from local testing
 /screenshot*.png
 /shot*.png
