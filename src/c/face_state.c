@@ -10,6 +10,7 @@
 static FaceMode s_mode = FACE_CLOCK;
 static FacePage s_page = PAGE_HOURS;
 static AppTimer *s_idle_timer = NULL;
+static AppTimer *s_rotate_timer = NULL;
 static void (*s_mark_dirty)(void) = NULL;
 
 static void prv_redraw(void) {
@@ -44,13 +45,54 @@ static int prv_next_enabled(int from) {
   return PAGE_COUNT;
 }
 
+// Auto-rotate: the lower zone cycles enabled pages forever on a timer.
+static void prv_rotate_fired(void *ctx) {
+  (void)ctx;
+  s_rotate_timer = NULL;
+  int next = prv_next_enabled((int)s_page);
+  if (next >= PAGE_COUNT) next = prv_next_enabled(-1);  // wrap
+  if (next < PAGE_COUNT) {
+    s_page = (FacePage)next;
+    s_mode = FACE_PEEK;
+  } else {
+    s_mode = FACE_CLOCK;  // no pages enabled
+  }
+  prv_redraw();
+  s_rotate_timer = app_timer_register(AUTO_ROTATE_MS, prv_rotate_fired, NULL);
+}
+
+// Reconcile timers/state with the current gesture mode. Idempotent — called
+// on init and whenever a Clay save may have changed GestureMode.
+void face_state_apply_mode(void) {
+  bool want_rotate = (settings_get_gesture_mode() == GESTURE_AUTO_ROTATE) &&
+                     settings_enabled_page_count() > 0;
+  if (want_rotate && !s_rotate_timer) {
+    prv_cancel_idle();
+    int first = prv_next_enabled(-1);
+    s_page = (FacePage)first;
+    s_mode = FACE_PEEK;
+    s_rotate_timer = app_timer_register(AUTO_ROTATE_MS, prv_rotate_fired, NULL);
+    prv_redraw();
+  } else if (!want_rotate && s_rotate_timer) {
+    app_timer_cancel(s_rotate_timer);
+    s_rotate_timer = NULL;
+    s_mode = FACE_CLOCK;
+    prv_redraw();
+  }
+}
+
 void face_state_init(void (*mark_dirty)(void)) {
   s_mark_dirty = mark_dirty;
   s_mode = FACE_CLOCK;
+  face_state_apply_mode();
 }
 
 void face_state_deinit(void) {
   prv_cancel_idle();
+  if (s_rotate_timer) {
+    app_timer_cancel(s_rotate_timer);
+    s_rotate_timer = NULL;
+  }
 }
 
 FaceMode face_state_mode(void) { return s_mode; }
@@ -110,6 +152,7 @@ void face_state_on_nudge(void) {
 
 void face_state_on_data(void) {
   anim_kick();
+  face_state_apply_mode();  // a Clay save may have changed GestureMode
   prv_redraw();
 }
 

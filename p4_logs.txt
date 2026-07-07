@@ -9,3 +9,6 @@ Launching VNC...
 [22:56:27] ocess_manager.c:487> Heap Usage for App <TouchyWeat: Total Size <113728B> Used <1688B> Still allocated <0B>
 [22:56:28] pkjs> ./src/pkjs/index.js:333:0 TouchyWeather Face PKJS ready
 [22:56:28] pkjs> ./src/pkjs/index.js:300:0 ready: last fetch 136s ago, skipping
+[22:58:28] ocess_manager.c:487> Heap Usage for App <TouchyWeat: Total Size <113728B> Used <1688B> Still allocated <0B>
+[22:58:29] pkjs> ./src/pkjs/index.js:333:0 TouchyWeather Face PKJS ready
+[22:58:29] pkjs> ./src/pkjs/index.js:300:0 ready: last fetch 257s ago, skipping

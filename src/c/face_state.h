@@ -32,3 +32,5 @@ void face_state_on_data(void);
 // Force back to CLOCK (idle timeout does this internally; comm/config
 // changes may want it too).
 void face_state_reset_to_clock(void);
+// Reconcile timers/state with the current gesture mode (idempotent).
+void face_state_apply_mode(void);
