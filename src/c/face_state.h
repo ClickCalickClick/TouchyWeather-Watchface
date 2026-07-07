@@ -34,3 +34,10 @@ void face_state_on_data(void);
 void face_state_reset_to_clock(void);
 // Reconcile timers/state with the current gesture mode (idempotent).
 void face_state_apply_mode(void);
+
+// Direct navigation for the (future) touch gestures — swipe left/right/up/
+// down map here. No-ops in AUTO_ROTATE mode.
+void face_state_next_page(void);
+void face_state_prev_page(void);
+void face_state_open_overlay(void);
+void face_state_dismiss(void);  // back to CLOCK

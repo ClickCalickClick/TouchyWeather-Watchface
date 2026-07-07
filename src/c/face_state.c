@@ -48,6 +48,14 @@ static int prv_next_enabled(int from) {
   return PAGE_COUNT;
 }
 
+// Last enabled page strictly before `from`; -1 means "before the start".
+static int prv_prev_enabled(int from) {
+  for (int i = from - 1; i >= 0; i--) {
+    if (settings_get_page_enabled((FacePage)i)) return i;
+  }
+  return -1;
+}
+
 // Auto-rotate: the lower zone cycles enabled pages forever on a timer.
 static void prv_rotate_fired(void *ctx) {
   (void)ctx;
@@ -183,4 +191,41 @@ void face_state_reset_to_clock(void) {
   prv_cancel_idle();
   s_mode = FACE_CLOCK;
   prv_redraw();
+}
+
+// --- Direct navigation (future touch gestures) ---
+
+void face_state_next_page(void) {
+  if (settings_get_gesture_mode() == GESTURE_AUTO_ROTATE) return;
+  anim_kick();
+  prv_nudge_deck();  // same semantics: advance, wrap past the end to clock
+}
+
+void face_state_prev_page(void) {
+  if (settings_get_gesture_mode() == GESTURE_AUTO_ROTATE) return;
+  anim_kick();
+  if (s_mode != FACE_PEEK) return;
+  int prev = prv_prev_enabled((int)s_page);
+  if (prev < 0) {
+    s_mode = FACE_CLOCK;
+    prv_cancel_idle();
+  } else {
+    s_page = (FacePage)prev;
+    prv_arm_idle(PEEK_IDLE_MS);
+  }
+  prv_redraw();
+}
+
+void face_state_open_overlay(void) {
+  if (settings_get_gesture_mode() == GESTURE_AUTO_ROTATE) return;
+  anim_kick();
+  s_mode = FACE_OVERLAY;
+  prv_arm_idle(PEEK_IDLE_MS);
+  prv_redraw();
+}
+
+void face_state_dismiss(void) {
+  if (settings_get_gesture_mode() == GESTURE_AUTO_ROTATE) return;
+  anim_kick();
+  face_state_reset_to_clock();
 }

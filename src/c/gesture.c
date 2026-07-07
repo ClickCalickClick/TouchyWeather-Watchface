@@ -15,6 +15,53 @@
 
 #if (ENABLE_TOUCH || TOUCH_SPIKE) && defined(PBL_TOUCH)
 
+#if ENABLE_TOUCH
+#include "comm.h"
+#include "anim.h"
+
+// Gesture thresholds — identical to the app's touch_handler so the two
+// feel the same the day faces get touch.
+#define HSWIPE_THRESHOLD 30
+#define VSWIPE_THRESHOLD 30
+#define TAP_THRESHOLD 15
+
+static int16_t s_start_x = 0, s_start_y = 0;
+
+// Classify on liftoff from the touchdown-to-liftoff delta (the app's exact
+// dx/dy discrimination). Mapping:
+//   horizontal swipe  left = next page, right = previous
+//   swipe up          open the everything-overlay (app's "swipe up = detail")
+//   swipe down        dismiss to clock; from clock = manual refresh
+//                     (the app's pull-to-refresh idiom, minus the sheet)
+//   tap               lower half = nudge; upper half = wake animation only
+static void prv_touch_classify(int16_t x, int16_t y) {
+  int dx = x - s_start_x;
+  int dy = y - s_start_y;
+  int adx = dx < 0 ? -dx : dx;
+  int ady = dy < 0 ? -dy : dy;
+
+  if (adx > HSWIPE_THRESHOLD && adx > ady) {
+    if (dx < 0) face_state_next_page();
+    else face_state_prev_page();
+  } else if (ady > VSWIPE_THRESHOLD && ady > adx) {
+    if (dy < 0) {
+      face_state_open_overlay();
+    } else if (face_state_mode() != FACE_CLOCK) {
+      face_state_dismiss();
+    } else {
+      anim_kick();
+      comm_request_refresh();
+    }
+  } else if (adx < TAP_THRESHOLD && ady < TAP_THRESHOLD) {
+    if (s_start_y > PBL_DISPLAY_HEIGHT / 2) {
+      face_state_on_nudge();
+    } else {
+      anim_kick();
+    }
+  }
+}
+#endif  // ENABLE_TOUCH
+
 static void prv_touch_handler(const TouchEvent *event, void *context) {
   (void)context;
 #if TOUCH_SPIKE
@@ -22,9 +69,21 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
           (int)event->type, (int)event->x, (int)event->y);
 #endif
 #if ENABLE_TOUCH
-  // Gesture mapping (mirrors the app's touch_handler thresholds) lands in
-  // Phase 7: tap lower half = nudge; swipe L/R = page nav; swipe up =
-  // overlay; swipe down = dismiss / refresh.
+  switch (event->type) {
+    case TouchEvent_Touchdown:
+      s_start_x = event->x;
+      s_start_y = event->y;
+      break;
+    case TouchEvent_PositionUpdate:
+      break;
+    case TouchEvent_Liftoff:
+      prv_touch_classify(event->x, event->y);
+      break;
+    default:
+      break;
+  }
+#else
+  (void)event;
 #endif
 }
 
