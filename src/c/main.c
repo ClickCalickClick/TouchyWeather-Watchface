@@ -5,6 +5,9 @@
 #include "weather_data.h"
 #include "anim.h"
 #include "clock_zone.h"
+#include "face_state.h"
+#include "gesture.h"
+#include "pages/pages.h"
 
 static Window *s_window;
 static Layer *s_root_layer;
@@ -15,11 +18,48 @@ static void prv_mark_dirty(void) {
   if (s_root_layer) layer_mark_dirty(s_root_layer);
 }
 
+// PEEK/OVERLAY vertical split: compact time line on top, page band in the
+// middle, page dots just above the banner pill (whose top sits at
+// H - pad_bottom - 22; see ui_draw_status_banner).
+#if defined(UI_SCREEN_SMALL_RECT)
+  #define PEEK_BAND_TOP   34
+  #define PEEK_DOTS_Y(H)  ((H) - 50)
+#elif defined(UI_SCREEN_SMALL_ROUND)
+  #define PEEK_BAND_TOP   56
+  #define PEEK_DOTS_Y(H)  ((H) - 48)
+#elif defined(UI_SCREEN_LARGE_RECT)
+  #define PEEK_BAND_TOP   36
+  #define PEEK_DOTS_Y(H)  ((H) - 50)
+#else  // UI_SCREEN_LARGE_ROUND
+  #define PEEK_BAND_TOP   56
+  #define PEEK_DOTS_Y(H)  ((H) - 64)
+#endif
+
 static void prv_root_update_proc(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   WeatherData *d = weather_data_get();
+  int H = bounds.size.h;
+  FaceMode mode = face_state_mode();
 
-  clock_zone_draw_full(ctx, bounds);
+  if (mode == FACE_CLOCK) {
+    clock_zone_draw_full(ctx, bounds);
+  } else {
+    clock_zone_draw_compact(ctx, bounds);
+    int dots_y = PEEK_DOTS_Y(H);
+    GRect band = GRect(bounds.origin.x, bounds.origin.y + PEEK_BAND_TOP,
+                       bounds.size.w, dots_y - 4 - PEEK_BAND_TOP);
+    if (mode == FACE_PEEK) {
+      page_draw(face_state_page(), ctx, band);
+      page_draw_indicator(ctx,
+                          GRect(bounds.origin.x, bounds.origin.y + dots_y,
+                                bounds.size.w, 6),
+                          face_state_page_ordinal(),
+                          face_state_enabled_count());
+    } else {  // FACE_OVERLAY
+      overlay_draw(ctx, band);
+    }
+  }
+
   ui_draw_auto_banner(ctx, bounds, d->rain_alert_min, d->last_updated,
                       anim_get_frame());
 }
@@ -57,6 +97,8 @@ static void prv_init(void) {
   theme_apply_to_window(s_window);
   window_stack_push(s_window, true);
 
+  face_state_init(prv_mark_dirty);
+  gesture_init();
   anim_set_redraw_callback(prv_mark_dirty);
   anim_init();
 
@@ -66,6 +108,8 @@ static void prv_init(void) {
 static void prv_deinit(void) {
   tick_timer_service_unsubscribe();
   anim_deinit();
+  gesture_deinit();
+  face_state_deinit();
   window_destroy(s_window);
 }
 
