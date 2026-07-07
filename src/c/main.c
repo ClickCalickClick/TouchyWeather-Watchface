@@ -7,6 +7,7 @@
 #include "clock_zone.h"
 #include "face_state.h"
 #include "gesture.h"
+#include "comm.h"
 #include "pages/pages.h"
 
 static Window *s_window;
@@ -66,7 +67,13 @@ static void prv_root_update_proc(Layer *layer, GContext *ctx) {
 
 static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   clock_zone_update_time();
+  comm_check_staleness();  // refetch if data is >30 min old
   prv_mark_dirty();
+}
+
+// Data or config arrived (weather fields, theme, gesture mode, ...).
+static void prv_on_data(void) {
+  face_state_on_data();
 }
 
 static void prv_window_load(Window *window) {
@@ -87,6 +94,10 @@ static void prv_init(void) {
   settings_init();
   theme_init();
   weather_data_init_mock();
+  // Load the cached blob over the mock BEFORE the first draw so units and
+  // values don't flash from mock to real (the app's units-flash fix).
+  comm_set_update_callback(prv_on_data);
+  comm_load_cache();
   clock_zone_update_time();
 
   s_window = window_create();
@@ -101,12 +112,14 @@ static void prv_init(void) {
   gesture_init();
   anim_set_redraw_callback(prv_mark_dirty);
   anim_init();
+  comm_init();
 
   tick_timer_service_subscribe(MINUTE_UNIT, prv_tick_handler);
 }
 
 static void prv_deinit(void) {
   tick_timer_service_unsubscribe();
+  comm_deinit();
   anim_deinit();
   gesture_deinit();
   face_state_deinit();
