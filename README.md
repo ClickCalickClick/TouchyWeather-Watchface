@@ -46,6 +46,14 @@ In a `watchface: true` build:
   set `TOUCH_SPIKE 1` in `src/c/gesture.c`, install on hardware (fw ≥ 5.92),
   tap the screen, and watch `pebble logs`.
 
+## Screenshots
+
+| emery (rest) | gabbro (rest) | emery (deck: 6 hours) |
+|---|---|---|
+| ![emery](screenshots/face_emery.png) | ![gabbro](screenshots/face_gabbro.png) | ![deck](screenshots/deck_hours_emery.png) |
+
+All six platforms in `screenshots/` — basalt, chalk, diorite, emery, flint, gabbro.
+
 ## Build / run
 
 ```bash

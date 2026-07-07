@@ -13,6 +13,15 @@
 static Window *s_window;
 static Layer *s_root_layer;
 
+// Banner alternation. The app drove the rain/updated flip off the anim
+// frame, which is fine there (constant interaction keeps anim alive) but
+// on an idle face anim freezes after ~8s and could freeze the banner on
+// UPDATED, hiding an active rain alert. So the face owns the flip with a
+// dedicated 4s timer that only exists while a rain alert is active.
+#define BANNER_FLIP_MS 4000
+static AppTimer *s_banner_timer = NULL;
+static bool s_banner_alt = false;  // false = RAIN pill, true = UPDATED pill
+
 // Single redraw funnel: every driver (minute tick, anim ticker, data
 // arrival, state changes) goes through here — one canvas, one dirty bit.
 static void prv_mark_dirty(void) {
@@ -69,8 +78,34 @@ static void prv_root_update_proc(Layer *layer, GContext *ctx) {
     }
   }
 
-  ui_draw_auto_banner(ctx, bounds, d->rain_alert_min, d->last_updated,
-                      anim_get_frame());
+  StatusBannerMode banner_mode =
+      (d->rain_alert_min >= 0 && !s_banner_alt) ? STATUS_BANNER_RAIN
+                                                : STATUS_BANNER_UPDATED;
+  ui_draw_status_banner(ctx, bounds, banner_mode, d->rain_alert_min,
+                        d->last_updated);
+}
+
+static void prv_banner_tick(void *ctx) {
+  (void)ctx;
+  s_banner_timer = NULL;
+  s_banner_alt = !s_banner_alt;
+  prv_mark_dirty();
+  if (weather_data_get()->rain_alert_min >= 0) {
+    s_banner_timer = app_timer_register(BANNER_FLIP_MS, prv_banner_tick, NULL);
+  }
+}
+
+// Start/stop the flip timer to match the current rain-alert state.
+static void prv_banner_reconcile(void) {
+  bool want = weather_data_get()->rain_alert_min >= 0;
+  if (want && !s_banner_timer) {
+    s_banner_alt = false;  // lead with the rain pill
+    s_banner_timer = app_timer_register(BANNER_FLIP_MS, prv_banner_tick, NULL);
+  } else if (!want && s_banner_timer) {
+    app_timer_cancel(s_banner_timer);
+    s_banner_timer = NULL;
+    s_banner_alt = false;
+  }
 }
 
 // Night mode: force the dark theme between sunset and sunrise, restoring
@@ -101,6 +136,7 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
 // Data or config arrived (weather fields, theme, gesture mode, ...).
 static void prv_on_data(void) {
   prv_apply_ambient();
+  prv_banner_reconcile();
   face_state_on_data();
 }
 
@@ -138,6 +174,8 @@ static void prv_init(void) {
   comm_set_update_callback(prv_on_data);
   comm_load_cache();
   clock_zone_update_time();
+  prv_apply_ambient();
+  prv_banner_reconcile();  // the cache may carry an active rain alert
 
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers) {
@@ -158,6 +196,10 @@ static void prv_init(void) {
 
 static void prv_deinit(void) {
   tick_timer_service_unsubscribe();
+  if (s_banner_timer) {
+    app_timer_cancel(s_banner_timer);
+    s_banner_timer = NULL;
+  }
   comm_deinit();
   anim_deinit();
   gesture_deinit();
