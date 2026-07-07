@@ -1,0 +1,22 @@
+# Build artifacts — regenerate with `pebble build`
+build/
+
+# JS dependencies — regenerate with `npm install`
+node_modules/
+
+# macOS metadata
+.DS_Store
+**/.DS_Store
+
+# Pebble emulator lock files
+.lock-waf_*
+.wafpickle-*
+
+# Secrets / env files
+.env
+.env.*
+*.env.local
+
+# Screenshots from local testing
+/screenshot*.png
+/shot*.png
