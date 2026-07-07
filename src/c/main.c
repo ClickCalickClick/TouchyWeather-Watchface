@@ -1,57 +1,71 @@
 #include <pebble.h>
-
-// Phase 0 hello-clock: proves the toolchain, path, and watchface plumbing.
-// Replaced by the real face (clock_zone + face_state) in Phase 1+.
+#include "theme.h"
+#include "ui.h"
+#include "settings.h"
+#include "weather_data.h"
+#include "anim.h"
+#include "clock_zone.h"
 
 static Window *s_window;
-static TextLayer *s_time_layer;
+static Layer *s_root_layer;
 
-static void prv_update_time(void) {
-  time_t now = time(NULL);
-  struct tm *t = localtime(&now);
-  static char s_buf[8];
-  strftime(s_buf, sizeof(s_buf), clock_is_24h_style() ? "%H:%M" : "%I:%M", t);
-  text_layer_set_text(s_time_layer, s_buf);
+// Single redraw funnel: every driver (minute tick, anim ticker, data
+// arrival, state changes) goes through here — one canvas, one dirty bit.
+static void prv_mark_dirty(void) {
+  if (s_root_layer) layer_mark_dirty(s_root_layer);
+}
+
+static void prv_root_update_proc(Layer *layer, GContext *ctx) {
+  GRect bounds = layer_get_bounds(layer);
+  WeatherData *d = weather_data_get();
+
+  clock_zone_draw_full(ctx, bounds);
+  ui_draw_auto_banner(ctx, bounds, d->rain_alert_min, d->last_updated,
+                      anim_get_frame());
 }
 
 static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
-  prv_update_time();
+  clock_zone_update_time();
+  prv_mark_dirty();
 }
 
 static void prv_window_load(Window *window) {
   Layer *root = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(root);
 
-  s_time_layer = text_layer_create(
-      GRect(0, bounds.size.h / 2 - 24, bounds.size.w, 48));
-  text_layer_set_background_color(s_time_layer, GColorClear);
-  text_layer_set_text_color(s_time_layer, GColorWhite);
-  text_layer_set_font(s_time_layer,
-                      fonts_get_system_font(FONT_KEY_LECO_42_NUMBERS));
-  text_layer_set_text_alignment(s_time_layer, GTextAlignmentCenter);
-  layer_add_child(root, text_layer_get_layer(s_time_layer));
-
-  prv_update_time();
+  s_root_layer = layer_create(bounds);
+  layer_set_update_proc(s_root_layer, prv_root_update_proc);
+  layer_add_child(root, s_root_layer);
 }
 
 static void prv_window_unload(Window *window) {
-  text_layer_destroy(s_time_layer);
+  layer_destroy(s_root_layer);
+  s_root_layer = NULL;
 }
 
 static void prv_init(void) {
+  settings_init();
+  theme_init();
+  weather_data_init_mock();
+  clock_zone_update_time();
+
   s_window = window_create();
-  window_set_background_color(s_window, GColorBlack);
   window_set_window_handlers(s_window, (WindowHandlers) {
     .load = prv_window_load,
     .unload = prv_window_unload,
   });
+  theme_apply_to_window(s_window);
   window_stack_push(s_window, true);
+
+  anim_set_redraw_callback(prv_mark_dirty);
+  anim_init();
 
   tick_timer_service_subscribe(MINUTE_UNIT, prv_tick_handler);
 }
 
 static void prv_deinit(void) {
   tick_timer_service_unsubscribe();
+  anim_deinit();
   window_destroy(s_window);
 }
 
