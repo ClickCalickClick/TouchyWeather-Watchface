@@ -42,6 +42,14 @@ static void prv_root_update_proc(Layer *layer, GContext *ctx) {
   int H = bounds.size.h;
   FaceMode mode = face_state_mode();
 
+  // Quick View reflow: when a timeline event obstructs the bottom, degrade
+  // to the compact time+temp line inside the unobstructed area.
+  GRect ub = layer_get_unobstructed_bounds(layer);
+  if (ub.size.h < bounds.size.h && settings_get_quick_view_reflow()) {
+    clock_zone_draw_compact(ctx, ub);
+    return;
+  }
+
   if (mode == FACE_CLOCK) {
     clock_zone_draw_full(ctx, bounds);
   } else {
@@ -65,15 +73,40 @@ static void prv_root_update_proc(Layer *layer, GContext *ctx) {
                       anim_get_frame());
 }
 
+// Night mode: force the dark theme between sunset and sunrise, restoring
+// the user's day theme after. s_night_theme_applied tracks whether the
+// current dark theme is ours (so we never clobber a deliberate choice).
+static bool s_night_theme_applied = false;
+
+static void prv_apply_ambient(void) {
+  clock_zone_recompute_night();
+  bool want_night_theme = settings_get_night_mode() && clock_zone_is_night();
+  if (want_night_theme && !s_night_theme_applied) {
+    settings_set_day_theme((int)theme_get());
+    theme_set(THEME_DARK);
+    s_night_theme_applied = true;
+  } else if (!want_night_theme && s_night_theme_applied) {
+    theme_set((ThemeMode)settings_get_day_theme());
+    s_night_theme_applied = false;
+  }
+}
+
 static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   clock_zone_update_time();
+  prv_apply_ambient();
   comm_check_staleness();  // refetch if data is >30 min old
   prv_mark_dirty();
 }
 
 // Data or config arrived (weather fields, theme, gesture mode, ...).
 static void prv_on_data(void) {
+  prv_apply_ambient();
   face_state_on_data();
+}
+
+static void prv_unobstructed_change(AnimationProgress progress, void *ctx) {
+  (void)progress; (void)ctx;
+  prv_mark_dirty();
 }
 
 static void prv_window_load(Window *window) {
@@ -83,9 +116,15 @@ static void prv_window_load(Window *window) {
   s_root_layer = layer_create(bounds);
   layer_set_update_proc(s_root_layer, prv_root_update_proc);
   layer_add_child(root, s_root_layer);
+
+  UnobstructedAreaHandlers handlers = {
+    .change = prv_unobstructed_change,
+  };
+  unobstructed_area_service_subscribe(handlers, NULL);
 }
 
 static void prv_window_unload(Window *window) {
+  unobstructed_area_service_unsubscribe();
   layer_destroy(s_root_layer);
   s_root_layer = NULL;
 }

@@ -54,7 +54,10 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 
   // --- Config (Clay) ---
   if ((t = dict_find(iter, MESSAGE_KEY_Theme))) {
-    theme_set(prv_tuple_int(t) ? THEME_DARK : THEME_LIGHT);
+    int theme_val = prv_tuple_int(t);
+    theme_set(theme_val ? THEME_DARK : THEME_LIGHT);
+    // Remember as the day theme so night mode restores this at sunrise.
+    settings_set_day_theme(theme_val ? 1 : 0);
     config_changed = true;
   }
   if ((t = dict_find(iter, MESSAGE_KEY_AnimationsEnabled))) {

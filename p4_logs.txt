@@ -12,3 +12,14 @@ Launching VNC...
 [22:58:28] ocess_manager.c:487> Heap Usage for App <TouchyWeat: Total Size <113728B> Used <1688B> Still allocated <0B>
 [22:58:29] pkjs> ./src/pkjs/index.js:333:0 TouchyWeather Face PKJS ready
 [22:58:29] pkjs> ./src/pkjs/index.js:300:0 ready: last fetch 257s ago, skipping
+[23:22:03] ocess_manager.c:487> Heap Usage for App <TouchyWeat: Total Size <112720B> Used <1688B> Still allocated <0B>
+[23:22:03] pkjs> ./src/pkjs/index.js:333:0 TouchyWeather Face PKJS ready
+[23:22:04] pkjs> ./src/pkjs/index.js:347:0 appmessage: LastUpdated sentinel, fetching weather
+[23:22:04] pkjs> ./src/pkjs/index.js:308:0 fetch already in flight, skipping
+[23:22:04] pkjs> ./src/pkjs/index.js:273:0 weather sent
+[23:23:42] pkjs> ./src/pkjs/index.js:347:0 appmessage: LastUpdated sentinel, fetching weather
+[23:23:43] pkjs> ./src/pkjs/index.js:273:0 weather sent
+[23:24:42] pkjs> ./src/pkjs/index.js:347:0 appmessage: LastUpdated sentinel, fetching weather
+[23:24:43] pkjs> ./src/pkjs/index.js:273:0 weather sent
+[23:26:31] pkjs> ./src/pkjs/index.js:347:0 appmessage: LastUpdated sentinel, fetching weather
+[23:26:32] pkjs> ./src/pkjs/index.js:273:0 weather sent

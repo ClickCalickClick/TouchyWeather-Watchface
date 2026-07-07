@@ -1,11 +1,14 @@
 #include "face_state.h"
 #include "anim.h"
+#include "weather_data.h"
 
 // Peek pages auto-return to the clock after this long with no nudges —
 // watch-face etiquette: the clock is never more than a short wait away.
 #define PEEK_IDLE_MS 7000
 // Auto-rotate mode advances pages on this cadence (Phase 5).
 #define AUTO_ROTATE_MS 10000
+// Rain auto-peek shows the hours page a little longer than a normal peek.
+#define RAIN_AUTOSHOW_MS 10000
 
 static FaceMode s_mode = FACE_CLOCK;
 static FacePage s_page = PAGE_HOURS;
@@ -150,9 +153,29 @@ void face_state_on_nudge(void) {
   }
 }
 
+// Rain auto-peek is edge-triggered: it fires when a data arrival newly
+// reports rain within the hour, not on every refresh while rain persists.
+static int s_last_rain_alert = -1;
+
 void face_state_on_data(void) {
   anim_kick();
   face_state_apply_mode();  // a Clay save may have changed GestureMode
+
+  WeatherData *d = weather_data_get();
+  int r = d->rain_alert_min;
+  bool imminent = (r >= 0 && r < 60);
+  bool was_imminent = (s_last_rain_alert >= 0 && s_last_rain_alert < 60);
+  s_last_rain_alert = r;
+  if (imminent && !was_imminent &&
+      settings_get_rain_auto_show() &&
+      s_mode == FACE_CLOCK &&
+      settings_get_gesture_mode() != GESTURE_AUTO_ROTATE &&
+      settings_get_page_enabled(PAGE_HOURS)) {
+    s_page = PAGE_HOURS;
+    s_mode = FACE_PEEK;
+    prv_arm_idle(RAIN_AUTOSHOW_MS);
+  }
+
   prv_redraw();
 }
 

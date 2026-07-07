@@ -12,3 +12,9 @@ void clock_zone_draw_compact(GContext *ctx, GRect bounds);
 // Re-read the wall clock into the cached strings. Call from the minute tick
 // before marking the root layer dirty.
 void clock_zone_update_time(void);
+
+// Night = current local time is after sunset or before sunrise, parsed from
+// the weather data's formatted sun times. Recompute on each tick / data
+// arrival; is_night reads the cached result.
+void clock_zone_recompute_night(void);
+bool clock_zone_is_night(void);

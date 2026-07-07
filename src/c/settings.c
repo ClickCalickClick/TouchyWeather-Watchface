@@ -13,6 +13,7 @@
 #define KEY_ANIMATIONS        19
 #define KEY_USE_DEW_POINT     20
 #define KEY_SHOW_LOCATION     21
+#define KEY_DAY_THEME         22
 
 static GestureMode s_gesture_mode = GESTURE_NUDGE_DECK;
 static bool s_page_enabled[PAGE_COUNT] = { true, true, true, true };
@@ -109,4 +110,11 @@ bool settings_get_show_location(void) { return s_show_location; }
 void settings_set_show_location(bool on) {
   s_show_location = on;
   persist_write_bool(KEY_SHOW_LOCATION, on);
+}
+
+int settings_get_day_theme(void) {
+  return persist_exists(KEY_DAY_THEME) ? (int)persist_read_int(KEY_DAY_THEME) : 0;
+}
+void settings_set_day_theme(int theme) {
+  persist_write_int(KEY_DAY_THEME, theme);
 }
