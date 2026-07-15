@@ -48,7 +48,7 @@ void overlay_draw(GContext *ctx, GRect bounds) {
   cells[5].label = "SUN";
   // "6:14-7:45" — strip the AM/PM to fit a half-width cell.
   {
-    char sr[8], ss[8];
+    char sr[10], ss[10];
     snprintf(sr, sizeof(sr), "%s", d->sunrise);
     snprintf(ss, sizeof(ss), "%s", d->sunset);
     for (char *p = sr; *p; p++) if (*p == ' ') { *p = '\0'; break; }

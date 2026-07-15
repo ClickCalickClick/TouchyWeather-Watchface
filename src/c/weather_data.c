@@ -14,7 +14,6 @@ void weather_data_init_mock(void) {
   s_data.humidity = 15;
   s_data.dew_point = 52;
   s_data.use_dew_point = false;
-  s_data.show_location = false;
   s_data.precip[0] = 25;
   s_data.precip[1] = 90;
   s_data.precip[2] = 65;
@@ -35,7 +34,7 @@ void weather_data_init_mock(void) {
   strncpy(s_data.sunrise, "6:14 AM", sizeof(s_data.sunrise));
   strncpy(s_data.sunset, "7:45 PM", sizeof(s_data.sunset));
   strncpy(s_data.location_name, "San Francisco", sizeof(s_data.location_name));
-  s_data.rain_alert_min = 15;
+  s_data.rain_alert_min = -1;  // no fabricated alert until real data arrives
   s_data.units = UNITS_IMPERIAL;
   s_data.last_updated = 0;
   s_data.valid = true;

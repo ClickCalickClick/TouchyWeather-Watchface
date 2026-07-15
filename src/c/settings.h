@@ -79,8 +79,6 @@ void settings_set_quick_view_reflow(bool on);
 
 bool settings_get_use_dew_point(void);    // conditions page: dew point vs humidity
 void settings_set_use_dew_point(bool on);
-bool settings_get_show_location(void);
-void settings_set_show_location(bool on);
 
 // The user's daytime theme choice, remembered so night mode can restore it
 // at sunrise (night mode force-sets dark without clobbering this).

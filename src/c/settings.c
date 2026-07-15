@@ -2,8 +2,8 @@
 
 // Persist layout (face namespace — independent of the app's storage):
 //   1      theme.c PERSIST_KEY_THEME (owned by theme.c, listed for the map)
-//   10..29 settings below
-//   30     comm.c weather cache blob (Phase 4)
+//   10..25 settings below (key 21 retired — see KEY_SHOW_LOCATION note)
+//   30..34 comm.c weather cache blob, chunked (Pebble caps values at 256B)
 #define KEY_GESTURE_MODE      10
 #define KEY_PAGE_BASE         11  // 11..14 = PAGE_HOURS..PAGE_SUN_MOON
 #define KEY_RAIN_AUTO_SHOW    15
@@ -12,7 +12,7 @@
 #define KEY_QUICK_VIEW        18
 #define KEY_ANIMATIONS        19
 #define KEY_USE_DEW_POINT     20
-#define KEY_SHOW_LOCATION     21
+// key 21 (retired KEY_SHOW_LOCATION) — dead feature removed; never reused
 #define KEY_DAY_THEME         22
 #define KEY_TAP_INPUT_MODE    23
 #define KEY_BATTERY_DISPLAY   24
@@ -26,7 +26,6 @@ static bool s_uv_badge = false;
 static bool s_quick_view = true;
 static bool s_animations = true;
 static bool s_use_dew_point = false;
-static bool s_show_location = false;
 static TapInputMode s_tap_input_mode = TAP_INPUT_WRIST;
 static BatteryDisplay s_battery_display = BATTERY_ALWAYS;
 static ComplicationSlot s_complication = COMPLICATION_OFF;
@@ -49,7 +48,6 @@ void settings_init(void) {
   s_quick_view = prv_read_bool(KEY_QUICK_VIEW, true);
   s_animations = prv_read_bool(KEY_ANIMATIONS, true);
   s_use_dew_point = prv_read_bool(KEY_USE_DEW_POINT, false);
-  s_show_location = prv_read_bool(KEY_SHOW_LOCATION, false);
   if (persist_exists(KEY_TAP_INPUT_MODE)) {
     s_tap_input_mode = (TapInputMode)persist_read_int(KEY_TAP_INPUT_MODE);
     if (s_tap_input_mode > TAP_INPUT_EITHER) s_tap_input_mode = TAP_INPUT_WRIST;
@@ -74,6 +72,7 @@ void settings_set_animations_enabled(bool on) {
 
 GestureMode settings_get_gesture_mode(void) { return s_gesture_mode; }
 void settings_set_gesture_mode(GestureMode mode) {
+  if (mode > GESTURE_OFF) mode = GESTURE_NUDGE_DECK;  // reject bad Clay value
   s_gesture_mode = mode;
   persist_write_int(KEY_GESTURE_MODE, (int)mode);
 }
@@ -124,12 +123,6 @@ void settings_set_use_dew_point(bool on) {
   persist_write_bool(KEY_USE_DEW_POINT, on);
 }
 
-bool settings_get_show_location(void) { return s_show_location; }
-void settings_set_show_location(bool on) {
-  s_show_location = on;
-  persist_write_bool(KEY_SHOW_LOCATION, on);
-}
-
 int settings_get_day_theme(void) {
   return persist_exists(KEY_DAY_THEME) ? (int)persist_read_int(KEY_DAY_THEME) : 0;
 }
@@ -139,18 +132,21 @@ void settings_set_day_theme(int theme) {
 
 TapInputMode settings_get_tap_input_mode(void) { return s_tap_input_mode; }
 void settings_set_tap_input_mode(TapInputMode mode) {
+  if (mode > TAP_INPUT_EITHER) mode = TAP_INPUT_WRIST;  // reject bad Clay value
   s_tap_input_mode = mode;
   persist_write_int(KEY_TAP_INPUT_MODE, (int)mode);
 }
 
 BatteryDisplay settings_get_battery_display(void) { return s_battery_display; }
 void settings_set_battery_display(BatteryDisplay mode) {
+  if (mode > BATTERY_WHEN_LOW) mode = BATTERY_ALWAYS;  // reject bad Clay value
   s_battery_display = mode;
   persist_write_int(KEY_BATTERY_DISPLAY, (int)mode);
 }
 
 ComplicationSlot settings_get_complication(void) { return s_complication; }
 void settings_set_complication(ComplicationSlot slot) {
+  if (slot > COMPLICATION_STEPS) slot = COMPLICATION_OFF;  // reject bad Clay value
   s_complication = slot;
   persist_write_int(KEY_COMPLICATION, (int)slot);
 }

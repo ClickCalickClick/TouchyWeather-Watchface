@@ -115,7 +115,13 @@ function xhr(url, cb) {
 // only aggregate counts — nothing identifiable leaves the device.
 // The key lives in gitignored secrets.js (template: secrets.js.example);
 // without it the ping just 401s and analytics is silently skipped.
-var PROXY_KEY = require('./secrets').PROXY_KEY;
+// secrets.js is gitignored and absent on a fresh clone (only the .example
+// ships). Guard the require so a missing key degrades analytics to a silent
+// skip instead of throwing at load time — which would prevent every event
+// listener below from registering and brick the whole watchface.
+var PROXY_KEY = '';
+try { PROXY_KEY = require('./secrets').PROXY_KEY || ''; }
+catch (e) { console.log('secrets.js absent; analytics disabled'); }
 var TRACK_PROXY_URL = 'https://touchyweather-radar-proxy.vercel.app/api/track' +
   (PROXY_KEY ? '?key=' + PROXY_KEY : '');
 
@@ -421,7 +427,20 @@ Pebble.addEventListener('appmessage', function(e) {
   // The watch reports its system clock style with each refresh request so
   // the "Match watch" time format can follow it.
   if (p.ClockIs24h !== undefined) {
-    localStorage.setItem('clockIs24h', p.ClockIs24h ? '1' : '0');
+    var newVal = p.ClockIs24h ? '1' : '0';
+    var prevVal = localStorage.getItem('clockIs24h');
+    localStorage.setItem('clockIs24h', newVal);
+    // Race fix: a `ready`-initiated fetch can run before this sentinel
+    // arrives, formatting hourly/sun labels in the default 12h style. If the
+    // watch's clock style just became known/changed and we're in "Match
+    // watch" mode, clear the freshness + in-flight guards so the fetch
+    // below regenerates the labels in the correct format instead of the
+    // wrong ones lingering until the next staleness refetch (~30 min).
+    if (prevVal !== newVal &&
+        (localStorage.getItem('timeFormat') || '0') === '0') {
+      localStorage.removeItem('lastFetchAt');
+      fetchStartedAt = 0;
+    }
   }
   // Only fetch when explicitly requested via the LastUpdated sentinel;
   // config messages must not trigger a fetch.

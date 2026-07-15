@@ -56,6 +56,12 @@ void anim_init(void) {
   s_frame = 0;
   // Animate through the first post-launch window, then settle.
   s_deadline_frame = ANIM_TIMEOUT_FRAMES;
+  // Cancel any timer a pre-init anim_kick() may have already registered so we
+  // never leak a handle / run two concurrent tick chains.
+  if (s_timer) {
+    app_timer_cancel(s_timer);
+    s_timer = NULL;
+  }
   s_timer = app_timer_register(ANIM_PERIOD_MS, prv_tick, NULL);
 }
 

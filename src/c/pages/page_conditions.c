@@ -40,7 +40,9 @@ void page_conditions_draw(GContext *ctx, GRect bounds) {
   y += feels_h + row_gap;
 
   // Split row: wind (left) | humidity or dew point (right), divider between.
-  graphics_context_set_stroke_color(ctx, theme_muted());
+  // theme_muted() is a gray that quantizes to the background on 1-bit
+  // displays (diorite/flint), erasing the divider stroke — use fg there.
+  graphics_context_set_stroke_color(ctx, PBL_IF_BW_ELSE(theme_fg(), theme_muted()));
   graphics_context_set_stroke_width(ctx, 1);
   graphics_draw_line(ctx, GPoint(ox + W / 2, y), GPoint(ox + W / 2, y + split_h - 4));
 

@@ -8,10 +8,14 @@
 
 static CommUpdateCb s_update_cb = NULL;
 
-// Face persist namespace (see settings.c for the full key map). Bump this
-// key whenever WeatherData's layout changes so an old blob can't misalign —
-// the app's 100→108 discipline.
+// Face persist namespace (see settings.c for the full key map). WeatherData
+// is larger than Pebble's 256-byte per-value persist cap, so the blob is
+// split across consecutive keys starting here (30..34 reserved). The
+// per-chunk size check on read is the layout-drift guard — a struct whose
+// size changed can't misalign, it just fails the size match and is skipped
+// (replaces the app's manual 100→108 key-bump discipline).
 #define PERSIST_KEY_CACHE 30
+#define PERSIST_CHUNK_MAX 256
 
 // Refetch when data is older than this (checked on the minute tick — the
 // face is always running, so this replaces the app's wakeup machinery).
@@ -20,13 +24,63 @@ static CommUpdateCb s_update_cb = NULL;
 #define LAUNCH_REFRESH_SECS (15 * 60)
 // Don't spam PKJS: minimum spacing between staleness-triggered requests.
 #define REQUEST_COOLDOWN_SECS 60
+// Cap for the geometric backoff when requests go unanswered (phone
+// unreachable): stop polling more often than this until data arrives.
+#define REQUEST_BACKOFF_MAX_SECS (30 * 60)
 
 static uint32_t s_last_request = 0;
+// Grows geometrically from the cooldown while requests go unanswered; reset
+// to the floor whenever real weather arrives (see prv_inbox_received).
+static uint32_t s_request_backoff = REQUEST_COOLDOWN_SECS;
+
+// Persist a blob larger than PERSIST_CHUNK_MAX by splitting it across
+// consecutive keys from base_key.
+static void prv_persist_write_blob(uint32_t base_key, const void *data,
+                                   size_t len) {
+  const uint8_t *p = (const uint8_t *)data;
+  size_t off = 0;
+  uint32_t key = base_key;
+  while (off < len) {
+    size_t chunk = len - off;
+    if (chunk > PERSIST_CHUNK_MAX) chunk = PERSIST_CHUNK_MAX;
+    persist_write_data(key, p + off, chunk);
+    off += chunk;
+    key++;
+  }
+}
+
+// Read a chunked blob back. Returns true only if every chunk exists and its
+// stored size matches exactly — otherwise `data` is left untouched (so a
+// stale-layout or partial cache can't corrupt the live struct).
+static bool prv_persist_read_blob(uint32_t base_key, void *data, size_t len) {
+  size_t off = 0;
+  uint32_t key = base_key;
+  while (off < len) {
+    size_t chunk = len - off;
+    if (chunk > PERSIST_CHUNK_MAX) chunk = PERSIST_CHUNK_MAX;
+    if (!persist_exists(key) || persist_get_size(key) != (int)chunk) {
+      return false;
+    }
+    off += chunk;
+    key++;
+  }
+  off = 0;
+  key = base_key;
+  uint8_t *p = (uint8_t *)data;
+  while (off < len) {
+    size_t chunk = len - off;
+    if (chunk > PERSIST_CHUNK_MAX) chunk = PERSIST_CHUNK_MAX;
+    persist_read_data(key, p + off, chunk);
+    off += chunk;
+    key++;
+  }
+  return true;
+}
 
 static void prv_save_cache(void) {
   WeatherData *d = weather_data_get();
   if (d->valid) {
-    persist_write_data(PERSIST_KEY_CACHE, d, sizeof(WeatherData));
+    prv_persist_write_blob(PERSIST_KEY_CACHE, d, sizeof(WeatherData));
   }
 }
 
@@ -42,6 +96,7 @@ static int prv_tuple_int(Tuple *t) {
 }
 
 static void prv_copy_str(char *dst, size_t n, Tuple *t) {
+  if (t->type != TUPLE_CSTRING) return;  // wrong type: leave dst unchanged
   strncpy(dst, t->value->cstring, n - 1);
   dst[n - 1] = '\0';
 }
@@ -115,12 +170,6 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
     d->use_dew_point = on;
     config_changed = true;
   }
-  if ((t = dict_find(iter, MESSAGE_KEY_ShowLocation))) {
-    bool on = prv_tuple_bool(t);
-    settings_set_show_location(on);
-    d->show_location = on;
-    config_changed = true;
-  }
 
   // --- Weather payload ---
   if ((t = dict_find(iter, MESSAGE_KEY_Temp))) { d->temp = t->value->int32; got_anything = true; }
@@ -139,7 +188,10 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, MESSAGE_KEY_Sunset))) { prv_copy_str(d->sunset, sizeof(d->sunset), t); }
   if ((t = dict_find(iter, MESSAGE_KEY_LocationName))) { prv_copy_str(d->location_name, sizeof(d->location_name), t); }
   if ((t = dict_find(iter, MESSAGE_KEY_RainAlertMinutes))) { d->rain_alert_min = t->value->int32; }
-  if ((t = dict_find(iter, MESSAGE_KEY_Units))) { d->units = (Units)t->value->int32; }
+  // Units is both a weather-payload field (sent as a real int) and a Clay
+  // radiogroup config key (sent as a CSTRING). Parse via the helper so a
+  // config-save "1" isn't misread as the ASCII code 0x31.
+  if ((t = dict_find(iter, MESSAGE_KEY_Units))) { d->units = (Units)prv_tuple_int(t); }
   if ((t = dict_find(iter, MESSAGE_KEY_LastUpdated))) {
     // PKJS sends the fetch's unix-second timestamp; anything < 100000 is a
     // sentinel echo, not a real time — use the device clock instead.
@@ -205,6 +257,7 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 
   if (got_anything) {
     d->valid = true;
+    s_request_backoff = REQUEST_COOLDOWN_SECS;  // phone answered: reset backoff
     prv_save_cache();
     anim_kick();  // fresh data: wake the hero icon for another window
   }
@@ -251,10 +304,17 @@ static void prv_outbox_failed(DictionaryIterator *iter, AppMessageResult reason,
 void comm_check_staleness(void) {
   WeatherData *d = weather_data_get();
   uint32_t now = (uint32_t)time(NULL);
-  if (now - s_last_request < REQUEST_COOLDOWN_SECS) return;
+  if (now - s_last_request < s_request_backoff) return;
   if (!d->valid || d->last_updated == 0 ||
       now - d->last_updated > STALE_REFETCH_SECS) {
     comm_request_refresh();
+    // Back off geometrically so an unreachable phone isn't polled every
+    // minute (each request also wakes phone geolocation + XHR). The backoff
+    // resets to the floor the moment real weather arrives.
+    s_request_backoff *= 2;
+    if (s_request_backoff > REQUEST_BACKOFF_MAX_SECS) {
+      s_request_backoff = REQUEST_BACKOFF_MAX_SECS;
+    }
   }
 }
 
@@ -269,11 +329,10 @@ static void prv_initial_refresh(void *ctx) {
 }
 
 void comm_load_cache(void) {
-  if (persist_exists(PERSIST_KEY_CACHE)) {
-    WeatherData *d = weather_data_get();
-    persist_read_data(PERSIST_KEY_CACHE, d, sizeof(WeatherData));
-  }
-  if (s_update_cb && weather_data_get()->valid) {
+  WeatherData *d = weather_data_get();
+  // On failure (missing/short/stale-layout cache) the mock is left intact.
+  prv_persist_read_blob(PERSIST_KEY_CACHE, d, sizeof(WeatherData));
+  if (s_update_cb && d->valid) {
     s_update_cb();
   }
 }

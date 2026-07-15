@@ -174,13 +174,7 @@ static void prv_init(void) {
   settings_init();
   theme_init();
   weather_data_init_mock();
-  // Load the cached blob over the mock BEFORE the first draw so units and
-  // values don't flash from mock to real (the app's units-flash fix).
-  comm_set_update_callback(prv_on_data);
-  comm_load_cache();
-  clock_zone_update_time();
-  prv_apply_ambient();
-  prv_banner_reconcile();  // the cache may carry an active rain alert
+  clock_zone_update_time();  // s_now_min must be set before any night calc
 
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers) {
@@ -190,11 +184,24 @@ static void prv_init(void) {
   theme_apply_to_window(s_window);
   window_stack_push(s_window, true);
 
+  // State + animation must be live BEFORE comm_load_cache(): its update
+  // callback (prv_on_data) drives face_state and the banner timer, and
+  // anim_kick() runs through it. Initializing comm first would fire the
+  // callback into uninitialized modules (leaked anim timer, clobbered mode).
   face_state_init(prv_mark_dirty);
   gesture_init();
   anim_set_redraw_callback(prv_mark_dirty);
   anim_init();
+
+  // Load the cached blob over the mock BEFORE the first draw so units and
+  // values don't flash from mock to real (the app's units-flash fix). This
+  // fires prv_on_data once, now that state + anim are ready.
+  comm_set_update_callback(prv_on_data);
+  comm_load_cache();
   comm_init();
+
+  prv_apply_ambient();
+  prv_banner_reconcile();  // the cache may carry an active rain alert
 
   tick_timer_service_subscribe(MINUTE_UNIT, prv_tick_handler);
   battery_state_service_subscribe(prv_battery_handler);

@@ -47,14 +47,17 @@ Single full-screen Layer; `main.c`'s update proc dispatches on
 - `clock_zone.c` — resting face + compact line; night computation, UV badge
 - `pages/` — peek pages, each `(GContext *ctx, GRect bounds)` like the
   app's cards; `overlay.c` is the single-peek grid
-- `comm.c` — trimmed app pipeline: inbox parse, persist cache (key 30),
-  refresh sentinel, minute-tick staleness refetch (no wakeups needed —
-  a face's PKJS runs while the face is active)
+- `comm.c` — trimmed app pipeline: inbox parse, persist cache (keys 30–34,
+  chunked — WeatherData exceeds Pebble's 256B persist cap), refresh
+  sentinel, minute-tick staleness refetch with geometric backoff (no
+  wakeups needed — a face's PKJS runs while the face is active)
 - `settings.c` — face settings; exports `settings_get_big_mode()` (false)
   and `settings_get_animations_enabled()` so the copied modules compile
 
-Persist keys: 1 theme (theme.c) · 10–22 settings · 30 weather cache
-(bump 30's comment trail whenever WeatherData changes layout).
+Persist keys: 1 theme (theme.c) · 10–25 settings (21 retired) · 30–34
+weather cache (chunked). The cache's per-chunk size check on read is the
+layout-drift guard — a struct whose size changed just fails to load and
+falls back to mock, no manual key-bump needed.
 
 ## Battery rules (enforce when adding timers)
 

@@ -27,13 +27,12 @@ typedef struct {
   int humidity;        // %
   int dew_point;       // °F or °C (matches `units`)
   bool use_dew_point;  // true → main card shows dew point instead of humidity
-  bool show_location;  // true → main card shows the location name (Clay toggle)
   int precip[5];       // 0..100 % for now / +1h / +2h / +3h / +4h
   int uv;              // 0..11+ — current UV (live)
   int uv_max;          // 0..11+ — today's forecast peak (for "PEAK n" subtitle)
   int aqi;             // US AQI 0..500
-  char sunrise[8];     // "6:14 AM"
-  char sunset[8];      // "7:45 PM"
+  char sunrise[10];    // "6:14 AM" / "10:15 PM" (8 chars + null + slack)
+  char sunset[10];     // "7:45 PM" / "12:05 AM"
   char location_name[32]; // human-readable city, e.g. "San Francisco"
   int rain_alert_min;  // minutes until rain, -1 if none
   Units units;

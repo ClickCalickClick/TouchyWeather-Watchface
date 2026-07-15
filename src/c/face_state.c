@@ -15,6 +15,8 @@ static FacePage s_page = PAGE_HOURS;
 static AppTimer *s_idle_timer = NULL;
 static AppTimer *s_rotate_timer = NULL;
 static void (*s_mark_dirty)(void) = NULL;
+// Rain auto-peek edge state (declared here so face_state_init can reset it).
+static int s_last_rain_alert = -1;
 
 static void prv_redraw(void) {
   if (s_mark_dirty) s_mark_dirty();
@@ -65,11 +67,14 @@ static void prv_rotate_fired(void *ctx) {
   if (next < PAGE_COUNT) {
     s_page = (FacePage)next;
     s_mode = FACE_PEEK;
+    // Re-arm only while at least one page exists. With none enabled we stop
+    // entirely (no recurring wakeup); face_state_apply_mode() restarts
+    // rotation when a page is re-enabled.
+    s_rotate_timer = app_timer_register(AUTO_ROTATE_MS, prv_rotate_fired, NULL);
   } else {
-    s_mode = FACE_CLOCK;  // no pages enabled
+    s_mode = FACE_CLOCK;  // no pages enabled: leave the timer stopped
   }
   prv_redraw();
-  s_rotate_timer = app_timer_register(AUTO_ROTATE_MS, prv_rotate_fired, NULL);
 }
 
 // Reconcile timers/state with the current gesture mode. Idempotent — called
@@ -90,11 +95,26 @@ void face_state_apply_mode(void) {
     s_mode = FACE_CLOCK;
     prv_redraw();
   }
+
+  // If the page currently being peeked was disabled out from under us (Clay
+  // save), snap to the first enabled page — otherwise we'd render a disabled
+  // page and face_state_page_ordinal() could index past the dot count.
+  if (s_mode == FACE_PEEK && !settings_get_page_enabled(s_page)) {
+    int first = prv_next_enabled(-1);
+    if (first < PAGE_COUNT) {
+      s_page = (FacePage)first;
+    } else {
+      s_mode = FACE_CLOCK;
+      prv_cancel_idle();
+    }
+  }
 }
 
 void face_state_init(void (*mark_dirty)(void)) {
   s_mark_dirty = mark_dirty;
   s_mode = FACE_CLOCK;
+  s_last_rain_alert = -1;  // clean edge-detector slate
+  prv_cancel_idle();       // no stray idle-return timer in CLOCK
   face_state_apply_mode();
 }
 
@@ -163,7 +183,7 @@ void face_state_on_nudge(void) {
 
 // Rain auto-peek is edge-triggered: it fires when a data arrival newly
 // reports rain within the hour, not on every refresh while rain persists.
-static int s_last_rain_alert = -1;
+// (s_last_rain_alert is declared at file scope above so init can reset it.)
 
 void face_state_on_data(void) {
   anim_kick();

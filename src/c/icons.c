@@ -155,6 +155,8 @@ void icon_draw_condition(GContext *ctx, GPoint c, int size,
       break;
     case COND_FOG:
       icon_draw_fog(ctx, c, size, ICON_CLOUD_COLOR); break;
+    default:  // out-of-range code: draw a plain cloud rather than nothing
+      icon_draw_cloud(ctx, c, size, ICON_CLOUD_COLOR); break;
   }
 }
 
@@ -480,6 +482,8 @@ void icon_draw_condition_animated(GContext *ctx, GPoint c, int size,
       break;
     case COND_FOG:
       icon_draw_fog_animated(ctx, c, size, ICON_CLOUD_COLOR, frame); break;
+    default:  // out-of-range code: draw a plain cloud rather than nothing
+      icon_draw_cloud(ctx, GPoint(c.x, c.y + by), size, ICON_CLOUD_COLOR); break;
   }
 }
 
