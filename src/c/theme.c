@@ -71,28 +71,39 @@ GColor theme_secondary(void) {
 // relied on hue for meaning are already differentiated by shape (up/down
 // arrows, distinct icons, chart markers). Color platforms are unchanged.
 //
-// Big Mode (Stage B) applies the SAME collapse-to-fg on COLOR platforms: the
-// high-contrast policy prioritizes strong figure/ground and colour-independent
-// legibility over hue, and the Big-Mode card layouts already carry meaning by
-// shape (↑/↓ arrows, distinct icons) — the same reason the B&W fallback is
-// safe. A card that genuinely needs a hue to BE the data (e.g. the AQI category
-// colour) can opt back out locally.
+// Big Mode (Stage B) keeps HUE on colour platforms but pushes CONTRAST: rather
+// than collapsing every accent to fg (which rendered the whole face as plain
+// black-on-white and lost the orange/blue high/low cueing), it swaps in a
+// darker, saturated variant on the light theme (readable against white) and
+// keeps the bright variant on the dark theme (readable against black). B&W
+// platforms have no colour to give, so they still collapse to fg. A card that
+// needs a specific hue to BE the data (e.g. AQI category colour) can opt back
+// out locally.
 GColor theme_accent_orange(void) {
-  // ~#FFAA00 — Pebble's chrome yellow / orange
-  if (settings_get_big_mode()) return theme_fg();
+  // Normal: ~#FFAA00 chrome yellow. Big Mode light: darker #AA5500 for contrast.
+  if (settings_get_big_mode()) {
+    return PBL_IF_COLOR_ELSE(
+        s_mode == THEME_DARK ? GColorChromeYellow : GColorWindsorTan, theme_fg());
+  }
   return PBL_IF_COLOR_ELSE(GColorChromeYellow, theme_fg());
 }
 
 GColor theme_accent_blue(void) {
-  // ~#00AAFF — bright cyan/blue
-  if (settings_get_big_mode()) return theme_fg();
+  // Normal: ~#00AAFF bright cyan. Big Mode light: darker #0055AA cobalt.
+  if (settings_get_big_mode()) {
+    return PBL_IF_COLOR_ELSE(
+        s_mode == THEME_DARK ? GColorVividCerulean : GColorCobaltBlue, theme_fg());
+  }
   return PBL_IF_COLOR_ELSE(GColorVividCerulean, theme_fg());
 }
 
 GColor theme_accent_advice(void) {
-  // Purple (GColorVividViolet) — distinct from orange (sunrise/UV/banner)
-  // and blue (sunset/precip/AQ). Readable on both dark and light backgrounds.
-  if (settings_get_big_mode()) return theme_fg();
+  // Purple, distinct from orange (sunrise/UV/banner) and blue (sunset/precip/AQ).
+  // Big Mode light: darker #5500AA indigo for contrast on white.
+  if (settings_get_big_mode()) {
+    return PBL_IF_COLOR_ELSE(
+        s_mode == THEME_DARK ? GColorVividViolet : GColorIndigo, theme_fg());
+  }
   return PBL_IF_COLOR_ELSE(GColorVividViolet, theme_fg());
 }
 

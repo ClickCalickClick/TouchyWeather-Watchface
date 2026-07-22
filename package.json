@@ -52,6 +52,7 @@
       "TapInputMode",
       "BatteryDisplay",
       "Complication",
+      "BigMode",
       "Temp",
       "FeelsLike",
       "High",
@@ -115,7 +116,14 @@
       "MoonPhase",
       "MoonIllum",
       "MoonName1",
-      "MoonName2"
+      "MoonName2",
+      "Complication2",
+      "RainChanceBadge",
+      "BadgeComp1",
+      "BadgeComp2",
+      "Badge1Notable",
+      "Badge2Notable",
+      "UpdatedDisplay"
     ],
     "resources": {
       "media": [

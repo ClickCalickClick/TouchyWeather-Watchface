@@ -1,6 +1,7 @@
 #include "pages.h"
 #include "../theme.h"
 #include "../ui.h"
+#include "../face_fonts.h"
 #include "../icons.h"
 #include "../weather_data.h"
 #include <stdio.h>
@@ -22,13 +23,16 @@ void page_week_draw(GContext *ctx, GRect bounds) {
   GFont row_font = ui_font_label();
   const int icon_size = 14;
   const int row_h = 18;
+  const int tbox = 22;
+  const int arrow = 10;
 #else
-  GFont row_font = ui_font_header();
-  const int icon_size = 16;
-  const int row_h = 24;
+  GFont row_font = face_font_header();  // 24B on large — only 4 rows, room to grow
+  const int icon_size = 20;
+  const int row_h = 30;
+  const int tbox = 26;
+  const int arrow = 12;
 #endif
   const int gap = 6;
-  const int arrow = 10;
   const int ag = 3;
 
   GSize day_max = GSize(0, 0), hi_max = GSize(0, 0), lo_max = GSize(0, 0);
@@ -68,7 +72,7 @@ void page_week_draw(GContext *ctx, GRect bounds) {
 
     graphics_context_set_text_color(ctx, theme_fg());
     graphics_draw_text(ctx, d->days_label[i], row_font,
-        GRect(x, row_y - 2, day_max.w + 4, 22),
+        GRect(x, row_y - 2, day_max.w + 4, tbox),
         GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
     x += day_max.w + gap;
 
@@ -82,7 +86,7 @@ void page_week_draw(GContext *ctx, GRect bounds) {
     snprintf(buf, sizeof(buf), "%d°", d->days_high[i]);
     graphics_context_set_text_color(ctx, theme_accent_orange());
     graphics_draw_text(ctx, buf, row_font,
-        GRect(x, row_y - 2, hi_max.w + 4, 22),
+        GRect(x, row_y - 2, hi_max.w + 4, tbox),
         GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
     x += hi_max.w + gap;
 
@@ -92,7 +96,7 @@ void page_week_draw(GContext *ctx, GRect bounds) {
     snprintf(buf, sizeof(buf), "%d°", d->days_low[i]);
     graphics_context_set_text_color(ctx, theme_accent_blue());
     graphics_draw_text(ctx, buf, row_font,
-        GRect(x, row_y - 2, lo_max.w + 4, 22),
+        GRect(x, row_y - 2, lo_max.w + 4, tbox),
         GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   }
 }

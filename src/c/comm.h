@@ -22,5 +22,9 @@ void comm_request_refresh(void);
 // Called from the minute tick: refetch if the data is older than 30 min.
 void comm_check_staleness(void);
 
+// True when the on-screen weather is stale (older than the refetch threshold)
+// or never received — used to decide whether to show the "last updated" pill.
+bool comm_data_is_stale(void);
+
 // Invoked on any data/config arrival that changed what's on screen.
 void comm_set_update_callback(CommUpdateCb cb);

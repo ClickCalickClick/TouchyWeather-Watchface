@@ -137,8 +137,12 @@ bool ui_draw_status_banner(GContext *ctx, GRect bounds,
   // there to reclaim a row of vertical space. Large classes unchanged.
 #if defined(UI_SCREEN_SMALL_ROUND)
   int pad_bottom = 18;
-#else
-  int pad_bottom = PBL_IF_ROUND_ELSE(35, 20);
+#elif defined(UI_SCREEN_LARGE_RECT)
+  int pad_bottom = 14;   // face-only: lowered (was 20) to clear a UV line above
+#elif defined(UI_SCREEN_LARGE_ROUND)
+  int pad_bottom = 26;   // face-only: lowered (was 35) to clear a UV line above
+#else  // UI_SCREEN_SMALL_RECT
+  int pad_bottom = 20;
 #endif
   // Big Mode: a taller, wider pill so the 18px label (ui_font_label bumps to
   // GOTHIC_18_BOLD in Big Mode) has room. The text rect derives from banner_h,
@@ -160,8 +164,12 @@ bool ui_draw_status_banner(GContext *ctx, GRect bounds,
   GColor pill_bg = (mode == STATUS_BANNER_RAIN)
                    ? theme_accent_orange()
                    : theme_muted();
+  // Rain text is black on the orange pill — but Big Mode collapses the accent
+  // to theme_fg() (its high-contrast policy), so on light theme the pill turns
+  // black and black text vanishes. When collapsed, invert the text to the
+  // background so the rain alert stays legible in the accessibility mode.
   GColor txt_color = (mode == STATUS_BANNER_RAIN)
-                     ? GColorBlack
+                     ? (settings_get_big_mode() ? theme_bg() : GColorBlack)
                      : theme_fg();
 #endif
 
