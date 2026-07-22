@@ -30,6 +30,9 @@ GFont face_font_title(void);    // card/overlay titles (needs ° / minus)
 GFont face_font_hero(void);     // resting-face weather-row temp — LECO_42 hero
                                 // (matches the clock + companion app; has °)
 GFont face_font_label(void);    // small bold labels / badges / complication
+GFont face_font_label_big(bool big);  // label at an EXPLICIT tier — the Big-Mode
+                                // overflow ladder demotes chrome rows to the
+                                // normal tier while the setting is still on
 GFont face_font_caption(void);  // muted captions / cell labels
 
 // --- Resting-face tier ramp (flow layout) ---
@@ -49,3 +52,12 @@ GFont face_font_clock_tier(int tier);  // hero time digits
 GFont face_font_temp_tier(int tier);   // weather-row temperature
 GFont face_font_hilo_tier(int tier);   // weather-row hi/lo pair
 int   face_icon_size_tier(int tier);   // weather-row condition/moon icon edge
+
+// The promoted TIME tier is a bundled custom OFL numeral (the first custom font
+// in the repo). It is lazy-loaded into a single static handle the first time
+// the flow promotes the clock, and lives for the rest of the process — call
+// face_fonts_deinit() from the app's deinit to release it. The glyph subset is
+// digits + colon only (characterRegex "[0-9:]"); it carries no ° or minus, so
+// it must never be reused for temperatures without widening that subset.
+GFont face_font_clock_xl(void);
+void  face_fonts_deinit(void);

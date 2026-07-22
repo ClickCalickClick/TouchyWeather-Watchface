@@ -67,37 +67,78 @@ GFont face_font_hero(void) {
   return fonts_get_system_font(FONT_KEY_LECO_42_NUMBERS);
 }
 
-GFont face_font_label(void) {
-  if (settings_get_big_mode()) return ui_font_label();  // 18B (==normal on large)
+GFont face_font_label_big(bool big) {
+  // Explicit-tier variant: the resting face's Big-Mode overflow ladder demotes
+  // chrome rows back to the normal tier while the setting is still ON, so it
+  // cannot go through the settings-driven accessors — name the fonts directly.
+  if (big) return fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
 #if defined(UI_SCREEN_LARGE_RECT) || defined(UI_SCREEN_LARGE_ROUND)
   return fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
 #else
-  return ui_font_label();
+  return fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD);
 #endif
+}
+
+GFont face_font_label(void) {
+  return face_font_label_big(settings_get_big_mode());
 }
 
 // --- Resting-face tier ramp ---------------------------------------------
 //
 // Base tier is picked so the full six-row stack fits the class; the promoted
-// tier is what the flow layout reaches for once rows are switched off. Chalk
-// is the one class whose base clock is smaller than LECO_42 — 180px of round
-// glass can't hold the full stack at the big numeral — so it promotes INTO
-// LECO_42, while the rect classes already start there and (until the custom
-// XL face lands) promote only their weather row.
+// tier is what the flow layout reaches for once rows are switched off. At the
+// promoted tier the clock jumps to the bundled XL custom face on every class
+// (see below); the base tier rests at LECO_36 on the tight small classes and
+// LECO_42 on the rect/large classes, where the six-row stack already fits.
+
+// --- Promoted XL clock face (bundled custom OFL numeral) -----------------
+//
+// Chakra Petch Bold, subset to digits + colon (characterRegex "[0-9:]"). One
+// bundled size per screen class (see package.json targetPlatforms) — the
+// resource name encodes the point size and the flow layout is tuned around
+// these. The RESOURCE_ID_FONT_CLOCK_XL_* symbol only exists on the class its
+// size targets, so the picker is compiled per class.
+#if defined(UI_SCREEN_SMALL_ROUND)      // chalk 180x180
+#  define XL_RESID RESOURCE_ID_FONT_CLOCK_XL_48
+#elif defined(UI_SCREEN_LARGE_RECT)     // emery 200x228
+#  define XL_RESID RESOURCE_ID_FONT_CLOCK_XL_56
+#elif defined(UI_SCREEN_LARGE_ROUND)    // gabbro 260x260
+#  define XL_RESID RESOURCE_ID_FONT_CLOCK_XL_64
+#else                                   // basalt/diorite/flint 144x168
+#  define XL_RESID RESOURCE_ID_FONT_CLOCK_XL_52
+#endif
+
+static GFont s_clock_xl = NULL;
+
+GFont face_font_clock_xl(void) {
+  if (!s_clock_xl) {
+    s_clock_xl = fonts_load_custom_font(resource_get_handle(XL_RESID));
+  }
+  // If the custom face ever fails to load, fall back to the largest system
+  // numeral rather than handing a NULL font to graphics_draw_text.
+  return s_clock_xl ? s_clock_xl
+                    : fonts_get_system_font(FONT_KEY_LECO_42_NUMBERS);
+}
+
+void face_fonts_deinit(void) {
+  if (s_clock_xl) {
+    fonts_unload_custom_font(s_clock_xl);
+    s_clock_xl = NULL;
+  }
+}
 
 GFont face_font_clock_tier(int tier) {
   if (settings_get_big_mode()) return face_font_clock();
+  // Promoted tier is the bundled XL custom face on every class — this is what
+  // fills the width when the flow switches optional rows off.
+  if (tier >= FACE_TIER_PROMOTED) return face_font_clock_xl();
 #if defined(UI_SCREEN_SMALL_ROUND) || defined(UI_SCREEN_SMALL_RECT)
-  // Both small classes start at LECO_36: at LECO_42 the six-row stack does not
+  // Both small classes rest at LECO_36: at LECO_42 the six-row stack does not
   // fit, and the row it would push off is the status stamp — dropping a row the
-  // user asked for is worse than a slightly smaller clock. They promote back to
-  // LECO_42 as soon as rows are switched off.
-  return (tier >= FACE_TIER_PROMOTED)
-             ? fonts_get_system_font(FONT_KEY_LECO_42_NUMBERS)
-             : fonts_get_system_font(FONT_KEY_LECO_36_BOLD_NUMBERS);
+  // user asked for is worse than a slightly smaller clock.
+  return fonts_get_system_font(FONT_KEY_LECO_36_BOLD_NUMBERS);
 #else
-  (void)tier;
-  return face_font_clock();
+  return face_font_clock();  // LECO_42 base on the large classes
 #endif
 }
 

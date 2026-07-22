@@ -49,7 +49,9 @@ int face_layout_required_h(const FlowRow rows[FLOW_ROW_COUNT]);
 // bezel.
 int face_layout_band_w(GRect bounds, int y, int h);
 
-// Smallest full-face stack: time + date + weather at base tier plus padding.
-// main.c's Quick View cascade uses this to decide whether the unobstructed
-// area can host the real face or has to fall back to the compact line.
-int face_layout_min_core_h(void);
+// Smallest full-face stack: time + date + weather plus padding, at the base
+// tier or (big_mode) the taller Big-Mode ramp. main.c's Quick View cascade
+// uses this to decide whether the unobstructed area can host the real face or
+// has to fall back to the compact line; it passes settings_get_big_mode() so
+// this file stays pure geometry.
+int face_layout_min_core_h(bool big_mode);

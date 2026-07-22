@@ -6,6 +6,7 @@
 #include "anim.h"
 #include "clock_zone.h"
 #include "face_layout.h"
+#include "face_fonts.h"
 #include "face_state.h"
 #include "gesture.h"
 #include "comm.h"
@@ -76,7 +77,7 @@ static void prv_root_update_proc(Layer *layer, GContext *ctx) {
   grect_standardize(&ub);
   grect_clip(&ub, &bounds);
   if (ub.size.h < bounds.size.h && settings_get_quick_view_reflow()) {
-    if (ub.size.h >= face_layout_min_core_h()) {
+    if (ub.size.h >= face_layout_min_core_h(settings_get_big_mode())) {
       clock_zone_draw_full(ctx, ub);
     } else if (ub.size.h < COMPACT_MIN_H) {
       clock_zone_draw_full(ctx, bounds);
@@ -259,6 +260,7 @@ static void prv_deinit(void) {
   anim_deinit();
   gesture_deinit();
   face_state_deinit();
+  face_fonts_deinit();  // release the lazily-loaded custom XL clock face
   window_destroy(s_window);
 }
 

@@ -76,6 +76,51 @@
   #define FZ_PILL_GAP     6
 #endif
 
+// Big-Mode chrome geometry. In the accessibility mode the label font is
+// GOTHIC_18_BOLD on every class, so the pill and comp-line boxes need the
+// large-class proportions everywhere, and the weather row's reservations grow
+// to match its Big fonts (GOTHIC_24_BOLD hi/lo pair, LECO_42 temp — the normal
+// constants above would under-reserve and let the pair overdraw the rows
+// below). The overflow ladder in clock_zone_draw_full walks chrome rows back
+// to the normal constants when the stack cannot fit.
+#define FZ_PILL_H_BIG     24
+#define FZ_COMP_BOX_H_BIG 22
+#if defined(UI_SCREEN_LARGE_RECT) || defined(UI_SCREEN_LARGE_ROUND)
+  #define FZ_HILO_PITCH_BIG 26   // == FZ_HILO_PITCH: Big == enlarged normal
+  #define FZ_TEMP_INK_BIG   40   // == FZ_TEMP_INK_H: LECO_42 either way
+#else
+  #define FZ_HILO_PITCH_BIG 24   // GOTHIC_24_BOLD pair on the small classes
+  #define FZ_TEMP_INK_BIG   38   // LECO_42 replaces BITHAM_30 / smaller LECO
+#endif
+
+// Which chrome rows (comp line, badge pills, status pill) are at the Big tier
+// for the CURRENT draw. Reset at the top of every clock_zone_draw_full — all
+// big in Big Mode, all normal otherwise — then cleared bottom-up by the
+// overflow ladder. Static, not a local (chalk's app stack is tight; see the
+// FaceMetrics note below), and single-threaded like the rest of the draw path.
+typedef struct { bool comps, badges, status; } ChromeBig;
+static ChromeBig s_chrome;
+
+// Big Mode's weather-row width fallback. The drawer can give the icon back
+// down to its floor, but past that a too-wide cluster clips the hi/lo column
+// off the screen edge — on the small-rect band the Big fonts (LECO_42 temp +
+// GOTHIC_24_BOLD pair) are simply wider than the glass. When set, the row
+// falls back to the enlarged-normal ramp (BITHAM_30_BLACK temp, 18B pair —
+// never smaller than normal mode, so the accessibility invariant holds).
+static bool s_big_weather_demoted;
+
+static int prv_comp_box_h(void)    { return s_chrome.comps  ? FZ_COMP_BOX_H_BIG : FZ_COMP_BOX_H; }
+static int prv_badge_pill_h(void)  { return s_chrome.badges ? FZ_PILL_H_BIG : FZ_PILL_H; }
+static int prv_status_pill_h(void) { return s_chrome.status ? FZ_PILL_H_BIG : FZ_PILL_H; }
+
+// Vertical text offset inside a pill. The layout box carries the font's
+// top-side internal leading, so the text rect starts slightly above the pill:
+// -2 is the tuned value for both normal-tier shapes (14B-in-16 on small, 18B
+// -in-22 on large); the taller Big pill recenters by half its extra height.
+static int prv_pill_text_dy(bool big, int pill_h) {
+  return big ? (pill_h - 22) / 2 - 2 : -2;
+}
+
 static char s_time_buf[8];   // "22:25" / "9:41"
 static char s_date_buf[16];  // "MON JUL 6"
 static int s_now_min = 0;    // minutes since local midnight (badge/night calc)
@@ -346,7 +391,7 @@ static void prv_build_comp_line(CompLine *out) {
 static void prv_draw_comp_text(GContext *ctx, GRect slot, const char *txt,
                                GColor color) {
   graphics_context_set_text_color(ctx, color);
-  graphics_draw_text(ctx, txt, face_font_label(), slot,
+  graphics_draw_text(ctx, txt, face_font_label_big(s_chrome.comps), slot,
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter,
                      NULL);
 }
@@ -396,9 +441,9 @@ static void prv_build_badges(Badge *b1, Badge *b2) {
   prv_build_badge(settings_get_badge2(), settings_get_badge2_notable(), b2);
 }
 
-static int prv_badge_w(const char *txt) {
+static int prv_badge_w(const char *txt, GFont f) {
   GSize s = graphics_text_layout_get_content_size(
-      txt, face_font_label(), GRect(0, 0, 140, 24),
+      txt, f, GRect(0, 0, 140, 24),
       GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter);
   return s.w + 2 * FZ_PILL_PAD;  // symmetric horizontal padding inside the pill
 }
@@ -406,8 +451,9 @@ static int prv_badge_w(const char *txt) {
 // Total width of the badge row as drawn (0 when nothing shows) — the flow
 // layout measures with this before deciding whether the row fits its chord.
 static int prv_badge_row_w(const Badge *b1, const Badge *b2) {
-  int w1 = b1->show ? prv_badge_w(b1->buf) : 0;
-  int w2 = b2->show ? prv_badge_w(b2->buf) : 0;
+  GFont f = face_font_label_big(s_chrome.badges);
+  int w1 = b1->show ? prv_badge_w(b1->buf, f) : 0;
+  int w2 = b2->show ? prv_badge_w(b2->buf, f) : 0;
   return w1 + w2 + ((b1->show && b2->show) ? FZ_PILL_GAP : 0);
 }
 
@@ -481,15 +527,19 @@ static void prv_draw_status_row(GContext *ctx, int ox, int W, int cy,
 
   // Clamp to the row's usable width, but never below the padding the text rect
   // subtracts — a narrower pill than that yields a negative-width text rect.
-  int w = prv_badge_w(buf);
+  GFont f = face_font_label_big(s_chrome.status);
+  const int ph = prv_status_pill_h();
+  int w = prv_badge_w(buf, f);
   if (w > W) w = W;
   if (w < 2 * FZ_PILL_PAD + 8) w = 2 * FZ_PILL_PAD + 8;
-  GRect r = GRect(ox + (W - w) / 2, cy - FZ_PILL_H / 2, w, FZ_PILL_H);
+  GRect r = GRect(ox + (W - w) / 2, cy - ph / 2, w, ph);
   graphics_context_set_fill_color(ctx, fill);
-  graphics_fill_rect(ctx, r, FZ_PILL_H / 2, GCornersAll);
+  graphics_fill_rect(ctx, r, ph / 2, GCornersAll);
   graphics_context_set_text_color(ctx, txt);
-  graphics_draw_text(ctx, buf, face_font_label(),
-                     GRect(r.origin.x + 4, r.origin.y - 2, r.size.w - 8, r.size.h),
+  graphics_draw_text(ctx, buf, f,
+                     GRect(r.origin.x + 4,
+                           r.origin.y + prv_pill_text_dy(s_chrome.status, ph),
+                           r.size.w - 8, r.size.h),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter,
                      NULL);
 }
@@ -498,8 +548,11 @@ static void prv_draw_pill(GContext *ctx, GRect r, const char *txt, GColor fill) 
   graphics_context_set_fill_color(ctx, fill);
   graphics_fill_rect(ctx, r, r.size.h / 2, GCornersAll);
   graphics_context_set_text_color(ctx, theme_bg());
-  graphics_draw_text(ctx, txt, face_font_label(),
-                     GRect(r.origin.x, r.origin.y - 2, r.size.w, r.size.h),
+  graphics_draw_text(ctx, txt, face_font_label_big(s_chrome.badges),
+                     GRect(r.origin.x,
+                           r.origin.y + prv_pill_text_dy(s_chrome.badges,
+                                                         r.size.h),
+                           r.size.w, r.size.h),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter,
                      NULL);
 }
@@ -508,17 +561,19 @@ static void prv_draw_pill(GContext *ctx, GRect r, const char *txt, GColor fill) 
 // side-by-side when both slots resolve; a single pill centers on its own.
 static void prv_draw_badge_row(GContext *ctx, int ox, int W, int cy,
                                const Badge *b1, const Badge *b2) {
+  GFont f = face_font_label_big(s_chrome.badges);
+  const int ph = prv_badge_pill_h();
   int total = prv_badge_row_w(b1, b2);
   if (total == 0) return;
   int x = ox + (W - total) / 2;
-  int y = cy - FZ_PILL_H / 2;
+  int y = cy - ph / 2;
   if (b1->show) {
-    int w = prv_badge_w(b1->buf);
-    prv_draw_pill(ctx, GRect(x, y, w, FZ_PILL_H), b1->buf, b1->fill);
+    int w = prv_badge_w(b1->buf, f);
+    prv_draw_pill(ctx, GRect(x, y, w, ph), b1->buf, b1->fill);
     x += w + FZ_PILL_GAP;
   }
   if (b2->show) {
-    prv_draw_pill(ctx, GRect(x, y, prv_badge_w(b2->buf), FZ_PILL_H),
+    prv_draw_pill(ctx, GRect(x, y, prv_badge_w(b2->buf, f), ph),
                   b2->buf, b2->fill);
   }
 }
@@ -526,6 +581,8 @@ static void prv_draw_badge_row(GContext *ctx, int ox, int W, int cy,
 // Everything the weather row needs, measured once per tier so the flow can try
 // a tier on for size before committing to drawing it.
 #define FZ_CLUSTER_GAP 10
+// Smallest icon the width giveback may leave — below this a sun is a speck.
+#define FZ_ICON_MIN 18
 typedef struct {
   GFont time_font;
   int   time_h;
@@ -543,14 +600,19 @@ static void prv_measure(FaceMetrics *m, int tier, int W) {
   WeatherData *d = weather_data_get();
 
   m->time_font = face_font_clock_tier(tier);
+  // Box is tall enough for the promoted XL custom face (up to 64px on gabbro,
+  // whose line box exceeds the old 90px cap) so its measured height isn't
+  // clipped, which would make the flow under-reserve the TIME row.
   GSize ts = graphics_text_layout_get_content_size(
-      s_time_buf, m->time_font, GRect(0, 0, W, 90),
+      s_time_buf, m->time_font, GRect(0, 0, W, 120),
       GTextOverflowModeFill, GTextAlignmentCenter);
   m->time_h = ts.h;
 
   char temp_buf[8];
   snprintf(temp_buf, sizeof(temp_buf), "%d°", d->temp);
-  m->temp_font = face_font_temp_tier(tier);
+  m->temp_font = s_big_weather_demoted
+                     ? fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK)
+                     : face_font_temp_tier(tier);
   m->temp_sz = graphics_text_layout_get_content_size(
       temp_buf, m->temp_font, GRect(0, 0, W, 60),
       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft);
@@ -558,7 +620,9 @@ static void prv_measure(FaceMetrics *m, int tier, int W) {
   char hi_b[8], lo_b[8];
   snprintf(hi_b, sizeof(hi_b), "%d°", d->high);
   snprintf(lo_b, sizeof(lo_b), "%d°", d->low);
-  m->hilo_font = face_font_hilo_tier(tier);
+  m->hilo_font = s_big_weather_demoted
+                     ? fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD)
+                     : face_font_hilo_tier(tier);
   GFont hl = m->hilo_font;
   GSize hi_sz = graphics_text_layout_get_content_size(hi_b, hl,
       GRect(0, 0, W, FZ_HILO_BOX_H), GTextOverflowModeTrailingEllipsis,
@@ -569,9 +633,13 @@ static void prv_measure(FaceMetrics *m, int tier, int W) {
   int hilo_text_w = hi_sz.w > lo_sz.w ? hi_sz.w : lo_sz.w;
   m->hilo_w = FZ_HILO_ARROW_COL + hilo_text_w;  // arrow+gap lead, then text
   // Widths come from measurement (they must fit real digits); heights come from
-  // the ink constants above.
-  m->hilo_line_h = (tier >= FACE_TIER_PROMOTED) ? FZ_HILO_PITCH
-                                                : FZ_HILO_PITCH - 2;
+  // the ink constants above. Big Mode reserves for ITS fonts (24B pair, LECO_42
+  // temp) — the tier constants describe the normal ramp and under-reserve it.
+  const bool big = settings_get_big_mode();
+  m->hilo_line_h = s_big_weather_demoted ? FZ_HILO_PITCH
+                       : big ? FZ_HILO_PITCH_BIG
+                       : (tier >= FACE_TIER_PROMOTED) ? FZ_HILO_PITCH
+                                                      : FZ_HILO_PITCH - 2;
 
   m->icon_size = face_icon_size_tier(tier);
   m->cluster_w = m->icon_size + FZ_CLUSTER_GAP + m->temp_sz.w +
@@ -580,7 +648,10 @@ static void prv_measure(FaceMetrics *m, int tier, int W) {
   // The row is as tall as its tallest member: the icon, the temp, or the
   // stacked hi/lo pair (two line heights).
   int hilo_h = 2 * m->hilo_line_h;
-  int temp_h = (tier >= FACE_TIER_PROMOTED) ? FZ_TEMP_INK_H + 6 : FZ_TEMP_INK_H;
+  int temp_h = s_big_weather_demoted ? FZ_TEMP_INK_H
+             : big                   ? FZ_TEMP_INK_BIG
+             : (tier >= FACE_TIER_PROMOTED) ? FZ_TEMP_INK_H + 6
+                                            : FZ_TEMP_INK_H;
   m->weather_h = m->icon_size;
   if (temp_h > m->weather_h) m->weather_h = temp_h;
   if (hilo_h > m->weather_h) m->weather_h = hilo_h;
@@ -593,13 +664,13 @@ static void prv_fill_rows(FlowRow rows[FLOW_ROW_COUNT], const FaceMetrics *m,
   rows[FLOW_ROW_DATE].present = true;
   rows[FLOW_ROW_DATE].h = FZ_DATE_BOX_H;
   rows[FLOW_ROW_COMPS].present = has_comps;
-  rows[FLOW_ROW_COMPS].h = FZ_COMP_BOX_H;
+  rows[FLOW_ROW_COMPS].h = prv_comp_box_h();
   rows[FLOW_ROW_WEATHER].present = true;
   rows[FLOW_ROW_WEATHER].h = m->weather_h;
   rows[FLOW_ROW_BADGES].present = has_badges;
-  rows[FLOW_ROW_BADGES].h = FZ_PILL_H;
+  rows[FLOW_ROW_BADGES].h = prv_badge_pill_h();
   rows[FLOW_ROW_UPDATED].present = has_status;
-  rows[FLOW_ROW_UPDATED].h = FZ_PILL_H;
+  rows[FLOW_ROW_UPDATED].h = prv_status_pill_h();
 }
 
 // Extra slack the promoted tier must leave behind before we take it. Without
@@ -626,6 +697,12 @@ void clock_zone_draw_full(GContext *ctx, GRect bounds) {
   const bool has_comps = comps.show1 || comps.show2;
   const bool has_badges = b1.show || b2.show;
 
+  // Chrome starts at the tier the mode asks for; the overflow ladder below
+  // may walk individual rows back down before anything is shed.
+  const bool big = settings_get_big_mode();
+  s_chrome.comps = s_chrome.badges = s_chrome.status = big;
+  s_big_weather_demoted = false;
+
   // --- Choose a tier, then solve ---
   // These are static rather than locals: the draw path is single-threaded and
   // runs one frame at a time, and holding two of each on the stack (a candidate
@@ -638,7 +715,7 @@ void clock_zone_draw_full(GContext *ctx, GRect bounds) {
   // fall back and re-measure. Big Mode never promotes — its ramp is already the
   // accessibility ceiling, and growing further would overflow the small classes.
   int tier = FACE_TIER_BASE;
-  if (!settings_get_big_mode()) {
+  if (!big) {
     prv_measure(&m, FACE_TIER_PROMOTED, W);
     prv_fill_rows(rows, &m, has_comps, has_badges, has_status);
     if (face_layout_required_h(rows) + FZ_PROMOTE_HEADROOM <= bounds.size.h &&
@@ -652,16 +729,75 @@ void clock_zone_draw_full(GContext *ctx, GRect bounds) {
     prv_fill_rows(rows, &m, has_comps, has_badges, has_status);
   }
 
-  // Still too tall (Big Mode on a small class, or a Quick View band)? Shed the
-  // optional rows from the bottom up — the status stamp first, then the badge
-  // pills, then the complication line — rather than clipping the clock.
-  if (face_layout_required_h(rows) > bounds.size.h) {
-    rows[FLOW_ROW_UPDATED].present = false;
-    if (face_layout_required_h(rows) > bounds.size.h) {
-      rows[FLOW_ROW_BADGES].present = false;
+  // --- Big-Mode overflow ladder ---
+  // Width first: past the icon's giveback floor, a too-wide Big cluster clips
+  // the hi/lo column off the glass, and a clipped reading is worse than a
+  // smaller one. Probe with the widest band the row could get (mid-screen);
+  // when even that loses, fall the weather row back to the enlarged-normal
+  // ramp and re-measure. Rect classes hit this only when the Big fonts
+  // genuinely outgrow the glass (small-rect); round classes get the same test
+  // against a generous chord.
+  if (big) {
+    int wband = face_layout_band_w(bounds, bounds.origin.y +
+                                   (bounds.size.h - m.weather_h) / 2,
+                                   m.weather_h);
+    if (m.cluster_w - (m.icon_size - FZ_ICON_MIN) > wband) {
+      s_big_weather_demoted = true;
+      prv_measure(&m, tier, W);
+      prv_fill_rows(rows, &m, has_comps, has_badges, has_status);
     }
-    if (face_layout_required_h(rows) > bounds.size.h) {
-      rows[FLOW_ROW_COMPS].present = false;
+  }
+
+  // Badge width guard: two Big-tier pills can outgrow a round class's chord
+  // even when the stack fits vertically, and the badge row has no ellipsis —
+  // it would run under the bezel. Probe the chord where the row typically
+  // lands (the lower quarter); on the rect classes band_w is constant, so
+  // this only ever bites round.
+  if (s_chrome.badges && has_badges) {
+    int probe_y = bounds.origin.y + (bounds.size.h * 3) / 4 - FZ_PILL_H_BIG / 2;
+    if (prv_badge_row_w(&b1, &b2) >
+        face_layout_band_w(bounds, probe_y, FZ_PILL_H_BIG)) {
+      s_chrome.badges = false;
+      prv_fill_rows(rows, &m, has_comps, has_badges, has_status);
+    }
+  }
+
+  // Height second: gaps already compress to FL_GAP_MIN inside required_h
+  // (step 1). Step 2: demote the chrome rows bottom-up to the normal tier —
+  // the accessibility contract is that TIME/DATE/WEATHER keep the big fonts;
+  // the housekeeping shrinks first, and each step is only taken if the
+  // previous one still overflows. The shed block below stays as the shared
+  // backstop (step 3).
+  if (big) {
+    if (face_layout_required_h(rows) > bounds.size.h && s_chrome.status) {
+      s_chrome.status = false;
+      prv_fill_rows(rows, &m, has_comps, has_badges, has_status);
+    }
+    if (face_layout_required_h(rows) > bounds.size.h && s_chrome.badges) {
+      s_chrome.badges = false;
+      prv_fill_rows(rows, &m, has_comps, has_badges, has_status);
+    }
+    if (face_layout_required_h(rows) > bounds.size.h && s_chrome.comps) {
+      s_chrome.comps = false;
+      prv_fill_rows(rows, &m, has_comps, has_badges, has_status);
+    }
+  }
+
+  // Still too tall (Big Mode on a small class, or a Quick View band)? Shed
+  // optional rows rather than clip the clock; face_layout_solve top-aligns if
+  // even that loses, so the clock stays whole. Normal order is bottom-up —
+  // the status stamp is the cheapest loss — but during an imminent-rain alert
+  // the status row IS the alert, so it flips to shedding last instead.
+  {
+    static const FlowRowId shed_normal[3] = {FLOW_ROW_UPDATED, FLOW_ROW_BADGES,
+                                             FLOW_ROW_COMPS};
+    static const FlowRowId shed_alert[3] = {FLOW_ROW_BADGES, FLOW_ROW_COMPS,
+                                            FLOW_ROW_UPDATED};
+    const FlowRowId *shed_order =
+        (d->rain_alert_min >= 0) ? shed_alert : shed_normal;
+    for (int i = 0; i < 3; i++) {
+      if (face_layout_required_h(rows) <= bounds.size.h) break;
+      rows[shed_order[i]].present = false;
     }
   }
 
@@ -705,7 +841,7 @@ void clock_zone_draw_full(GContext *ctx, GRect bounds) {
     int icon = m.icon_size;
     int cluster = m.cluster_w;
     if (cluster > avail_w) {
-      const int min_icon = 18;
+      const int min_icon = FZ_ICON_MIN;
       int over = cluster - avail_w;
       int room = icon - min_icon;
       int shrink = (room < over) ? room : over;
