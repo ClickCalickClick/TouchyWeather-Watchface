@@ -52,6 +52,12 @@ module.exports = [
         "defaultValue": "Four slots you can fill with any reading: two text lines under the date, and two colored pills below the weather. Whatever you leave off, the rest of the face grows to fill the space."
       },
       {
+        "type": "faceSchematic",
+        "id": "faceSchematic",
+        "label": "Live preview",
+        "description": "A rough sketch of the resting face with your current settings — boxes appear, disappear and recenter as you change the slots below. It follows your connected watch's shape and screen; a dashed pill only shows when its reading is notable."
+      },
+      {
         "type": "select",
         "messageKey": "Complication",
         "label": "Line 1",
