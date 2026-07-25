@@ -50,9 +50,9 @@
       "UVBadge",
       "QuickViewReflow",
       "TapInputMode",
-      "BatteryDisplay",
+      "RetiredBatteryDisplay",
       "Complication",
-      "BigMode",
+      "RetiredBigMode",
       "Temp",
       "FeelsLike",
       "High",
@@ -123,7 +123,8 @@
       "BadgeComp2",
       "Badge1Notable",
       "Badge2Notable",
-      "UpdatedDisplay"
+      "UpdatedDisplay",
+      "SinglePeekView"
     ],
     "resources": {
       "media": [

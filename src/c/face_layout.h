@@ -37,6 +37,10 @@ typedef struct {
 // each row's usable width. Returns false when even minimum gaps overflow — the
 // rows are still placed (top-aligned, minimum gaps) so a caller that can't
 // shrink further has a defined, non-clipping-at-the-top result to draw.
+//
+// The whole rect is the flow's: the face has no out-of-flow chrome left (the
+// battery glyph, which used to claim a top band, is now an ordinary
+// complication in an ordinary row), so the stack always centers in `avail`.
 bool face_layout_solve(FlowRow rows[FLOW_ROW_COUNT], GRect avail);
 
 // Height the stack needs at minimum gaps, including the class's top/bottom
@@ -50,8 +54,7 @@ int face_layout_required_h(const FlowRow rows[FLOW_ROW_COUNT]);
 int face_layout_band_w(GRect bounds, int y, int h);
 
 // Smallest full-face stack: time + date + weather plus padding, at the base
-// tier or (big_mode) the taller Big-Mode ramp. main.c's Quick View cascade
-// uses this to decide whether the unobstructed area can host the real face or
-// has to fall back to the compact line; it passes settings_get_big_mode() so
-// this file stays pure geometry.
-int face_layout_min_core_h(bool big_mode);
+// tier. main.c's Quick View cascade uses this to decide whether the
+// unobstructed area can host the real face or has to fall back to the compact
+// line.
+int face_layout_min_core_h(void);

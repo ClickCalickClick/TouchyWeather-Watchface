@@ -4,7 +4,7 @@
 //   1      theme.c PERSIST_KEY_THEME (owned by theme.c, listed for the map)
 //   10..29 settings below
 //   30     comm.c weather cache blob (Phase 4) — NOT ours, never reuse
-//   31..34 settings below (continued past the cache key)
+//   31..35 settings below (continued past the cache key)
 #define KEY_GESTURE_MODE      10
 #define KEY_PAGE_BASE         11  // 11..14 = PAGE_HOURS..PAGE_SUN_MOON
 #define KEY_RAIN_AUTO_SHOW    15
@@ -16,9 +16,9 @@
 #define KEY_SHOW_LOCATION     21
 #define KEY_DAY_THEME         22
 #define KEY_TAP_INPUT_MODE    23
-#define KEY_BATTERY_DISPLAY   24
+#define KEY_BATTERY_DISPLAY   24  // legacy (v1.2 battery glyph); retired, deleted
 #define KEY_COMPLICATION      25
-#define KEY_BIG_MODE          26
+#define KEY_BIG_MODE_RETIRED  26  // legacy (v1.2 Big Mode);      retired, deleted
 #define KEY_COMPLICATION2     27
 #define KEY_RAIN_CHANCE_BADGE 28  // legacy (v1.1); migrated into KEY_BADGE1
 #define KEY_BADGE1            29
@@ -26,6 +26,7 @@
 #define KEY_BADGE1_NOTABLE    32
 #define KEY_BADGE2_NOTABLE    33
 #define KEY_UPDATED_DISPLAY   34
+#define KEY_SINGLE_PEEK_VIEW  35
 
 // The weather cache, read here only as an "is this an upgrade?" probe during
 // badge migration. comm.c owns it; we never write or delete it.
@@ -40,7 +41,6 @@ static bool s_animations = true;
 static bool s_use_dew_point = false;
 static bool s_show_location = false;
 static TapInputMode s_tap_input_mode = TAP_INPUT_WRIST;
-static BatteryDisplay s_battery_display = BATTERY_WHEN_LOW;
 static ComplicationSlot s_complication = COMPLICATION_FEELS;  // useful out-of-box default
 static ComplicationSlot s_complication2 = COMPLICATION_OFF;
 static ComplicationSlot s_badge1 = COMPLICATION_RAIN_CHANCE;
@@ -48,7 +48,7 @@ static ComplicationSlot s_badge2 = COMPLICATION_OFF;
 static bool s_badge1_notable = false;
 static bool s_badge2_notable = false;
 static UpdatedDisplay s_updated_display = UPDATED_ALWAYS;
-static bool s_big_mode = false;
+static SinglePeekView s_single_peek_view = SINGLE_PEEK_OVERLAY;
 
 static bool prv_read_bool(uint32_t key, bool fallback) {
   return persist_exists(key) ? persist_read_bool(key) : fallback;
@@ -128,10 +128,12 @@ void settings_init(void) {
     s_tap_input_mode = (TapInputMode)persist_read_int(KEY_TAP_INPUT_MODE);
     if (s_tap_input_mode > TAP_INPUT_EITHER) s_tap_input_mode = TAP_INPUT_WRIST;
   }
-  if (persist_exists(KEY_BATTERY_DISPLAY)) {
-    s_battery_display = (BatteryDisplay)persist_read_int(KEY_BATTERY_DISPLAY);
-    if (s_battery_display > BATTERY_WHEN_LOW) s_battery_display = BATTERY_WHEN_LOW;
-  }
+  // The v1.2 out-of-flow battery glyph is gone — the charge level is now just
+  // another reading the user can put in a slot (COMPLICATION_BATTERY), and it
+  // only shows if they ask for it. Drop the retired key rather than leave it
+  // squatting in the settings range (theme.c's migrate-then-delete precedent).
+  if (persist_exists(KEY_BATTERY_DISPLAY)) persist_delete(KEY_BATTERY_DISPLAY);
+
   s_complication = prv_read_slot(KEY_COMPLICATION, COMPLICATION_FEELS);
   s_complication2 = prv_read_slot(KEY_COMPLICATION2, COMPLICATION_OFF);
 
@@ -151,13 +153,17 @@ void settings_init(void) {
     s_updated_display = (UpdatedDisplay)persist_read_int(KEY_UPDATED_DISPLAY);
     if (s_updated_display > UPDATED_NEVER) s_updated_display = UPDATED_ALWAYS;
   }
-  s_big_mode = prv_read_bool(KEY_BIG_MODE, false);
-}
+  if (persist_exists(KEY_SINGLE_PEEK_VIEW)) {
+    s_single_peek_view = (SinglePeekView)persist_read_int(KEY_SINGLE_PEEK_VIEW);
+    if (s_single_peek_view > SINGLE_PEEK_MAX) {
+      s_single_peek_view = SINGLE_PEEK_OVERLAY;
+    }
+  }
 
-bool settings_get_big_mode(void) { return s_big_mode; }
-void settings_set_big_mode(bool on) {
-  s_big_mode = on;
-  persist_write_bool(KEY_BIG_MODE, on);
+  // Big Mode (v1.2 accessibility toggle, key 26) is retired — the flow layout
+  // now grows the type on its own as slots are switched off, which is what Big
+  // Mode was really for. Drop the key so it can't linger in the range.
+  if (persist_exists(KEY_BIG_MODE_RETIRED)) persist_delete(KEY_BIG_MODE_RETIRED);
 }
 
 bool settings_get_animations_enabled(void) { return s_animations; }
@@ -231,12 +237,6 @@ void settings_set_tap_input_mode(TapInputMode mode) {
   persist_write_int(KEY_TAP_INPUT_MODE, (int)mode);
 }
 
-BatteryDisplay settings_get_battery_display(void) { return s_battery_display; }
-void settings_set_battery_display(BatteryDisplay mode) {
-  s_battery_display = mode;
-  persist_write_int(KEY_BATTERY_DISPLAY, (int)mode);
-}
-
 ComplicationSlot settings_get_complication(void) { return s_complication; }
 void settings_set_complication(ComplicationSlot slot) {
   s_complication = slot;
@@ -281,4 +281,11 @@ UpdatedDisplay settings_get_updated_display(void) { return s_updated_display; }
 void settings_set_updated_display(UpdatedDisplay mode) {
   s_updated_display = mode;
   persist_write_int(KEY_UPDATED_DISPLAY, (int)mode);
+}
+
+SinglePeekView settings_get_single_peek_view(void) { return s_single_peek_view; }
+void settings_set_single_peek_view(SinglePeekView view) {
+  if (view > SINGLE_PEEK_MAX) view = SINGLE_PEEK_OVERLAY;
+  s_single_peek_view = view;
+  persist_write_int(KEY_SINGLE_PEEK_VIEW, (int)view);
 }

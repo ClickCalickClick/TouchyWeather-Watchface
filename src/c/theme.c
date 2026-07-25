@@ -53,15 +53,10 @@ GColor theme_muted(void) {
 // (LightGray on white) is unreadable for actual text. Use this for any
 // body text that needs to be de-emphasized but still legible.
 GColor theme_secondary(void) {
-  // Big Mode (Stage B): high-contrast policy — de-emphasized body text is a
-  // low-vision liability, so collapse it to full-contrast fg. (theme_muted is
-  // deliberately NOT collapsed: it drives the inactive page-indicator dots,
-  // which must stay distinct from the fg active dot.)
-  if (settings_get_big_mode()) return theme_fg();
   return s_mode == THEME_DARK ? GColorLightGray : GColorDarkGray;
 }
 
-// --- Accent colors (Phase 5: B&W fallback; Stage B: Big-Mode high contrast) ---
+// --- Accent colors (Phase 5: B&W fallback) ---
 // On 1-bit (aplite/diorite/flint) the SDK auto-reduces these accents to
 // GColorWhite, which is INVISIBLE on the light theme's white background
 // (the hi/lo temps, arrows, gauges and chart lines vanished on diorite).
@@ -70,40 +65,16 @@ GColor theme_secondary(void) {
 // differentiation is lost on B&W (all accents read as fg); elements that
 // relied on hue for meaning are already differentiated by shape (up/down
 // arrows, distinct icons, chart markers). Color platforms are unchanged.
-//
-// Big Mode (Stage B) keeps HUE on colour platforms but pushes CONTRAST: rather
-// than collapsing every accent to fg (which rendered the whole face as plain
-// black-on-white and lost the orange/blue high/low cueing), it swaps in a
-// darker, saturated variant on the light theme (readable against white) and
-// keeps the bright variant on the dark theme (readable against black). B&W
-// platforms have no colour to give, so they still collapse to fg. A card that
-// needs a specific hue to BE the data (e.g. AQI category colour) can opt back
-// out locally.
 GColor theme_accent_orange(void) {
-  // Normal: ~#FFAA00 chrome yellow. Big Mode light: darker #AA5500 for contrast.
-  if (settings_get_big_mode()) {
-    return PBL_IF_COLOR_ELSE(
-        s_mode == THEME_DARK ? GColorChromeYellow : GColorWindsorTan, theme_fg());
-  }
-  return PBL_IF_COLOR_ELSE(GColorChromeYellow, theme_fg());
+  return PBL_IF_COLOR_ELSE(GColorChromeYellow, theme_fg());  // ~#FFAA00
 }
 
 GColor theme_accent_blue(void) {
-  // Normal: ~#00AAFF bright cyan. Big Mode light: darker #0055AA cobalt.
-  if (settings_get_big_mode()) {
-    return PBL_IF_COLOR_ELSE(
-        s_mode == THEME_DARK ? GColorVividCerulean : GColorCobaltBlue, theme_fg());
-  }
-  return PBL_IF_COLOR_ELSE(GColorVividCerulean, theme_fg());
+  return PBL_IF_COLOR_ELSE(GColorVividCerulean, theme_fg());  // ~#00AAFF
 }
 
 GColor theme_accent_advice(void) {
   // Purple, distinct from orange (sunrise/UV/banner) and blue (sunset/precip/AQ).
-  // Big Mode light: darker #5500AA indigo for contrast on white.
-  if (settings_get_big_mode()) {
-    return PBL_IF_COLOR_ELSE(
-        s_mode == THEME_DARK ? GColorVividViolet : GColorIndigo, theme_fg());
-  }
   return PBL_IF_COLOR_ELSE(GColorVividViolet, theme_fg());
 }
 

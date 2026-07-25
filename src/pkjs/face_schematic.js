@@ -98,14 +98,16 @@ module.exports = {
       if (v === 6) return 'STEPS 5K';
       if (v === 7) return 'DEW 51°';
       if (v === 8) return 'RAIN 60%';
+      if (v === 9) return 'BATT 80%';
       return '';
     }
 
     // Badge fill family, mirroring clock_zone.c's prv_format_badge:
-    // RAIN/HUM/DEW/AQI → blue, UV/FEELS → orange, WIND → neutral.
+    // RAIN/HUM/DEW/AQI → blue, UV/FEELS → orange, WIND/BATT → neutral (the
+    // battery only turns orange when it is low, which the sketch doesn't model).
     function badgeKind(v) {
       if (v === 4 || v === 1) return 'orange';
-      if (v === 2) return 'wind';
+      if (v === 2 || v === 9) return 'wind';
       return 'blue';
     }
 

@@ -12,6 +12,11 @@
 
 static FaceMode s_mode = FACE_CLOCK;
 static FacePage s_page = PAGE_HOURS;
+// Deck resume: last page shown while paging the deck; -1 = never dealt, so the
+// first nudge starts at the first enabled page. Lets a nudge from the resting
+// clock continue where the deck left off instead of always restarting at page 1
+// once the 7s idle timer has returned to the clock.
+static int s_deck_pos = -1;
 static AppTimer *s_idle_timer = NULL;
 static AppTimer *s_rotate_timer = NULL;
 static void (*s_mark_dirty)(void) = NULL;
@@ -121,9 +126,13 @@ int face_state_enabled_count(void) { return settings_enabled_page_count(); }
 
 static void prv_nudge_deck(void) {
   if (s_mode == FACE_CLOCK) {
-    int first = prv_next_enabled(-1);
-    if (first >= PAGE_COUNT) return;  // no pages enabled: stay a plain clock
-    s_page = (FacePage)first;
+    // Resume after the last page shown, wrapping past the end to the first
+    // enabled page so a nudge from the clock is never dead while pages exist.
+    int next = prv_next_enabled(s_deck_pos);
+    if (next >= PAGE_COUNT) next = prv_next_enabled(-1);
+    if (next >= PAGE_COUNT) return;  // no pages enabled: stay a plain clock
+    s_page = (FacePage)next;
+    s_deck_pos = next;
     s_mode = FACE_PEEK;
     prv_arm_idle(PEEK_IDLE_MS);
   } else {
@@ -131,17 +140,30 @@ static void prv_nudge_deck(void) {
     if (next >= PAGE_COUNT) {
       s_mode = FACE_CLOCK;  // stepped past the last page: back to the clock
       prv_cancel_idle();
+      // Leave s_deck_pos on the last page shown: the next clock nudge wraps to
+      // the first page, so the deck cycles rather than dead-ending.
     } else {
       s_page = (FacePage)next;
+      s_deck_pos = next;
       prv_arm_idle(PEEK_IDLE_MS);
     }
   }
   prv_redraw();
 }
 
+// Single peek: one nudge opens the ONE view the user pinned, the next closes
+// it. That view is the dense everything-overlay by default, or any single peek
+// page — deliberately independent of the Peek Pages toggles, which deal the
+// Nudge Deck / Auto-rotate decks rather than this fixed view.
 static void prv_nudge_single_peek(void) {
   if (s_mode == FACE_CLOCK) {
-    s_mode = FACE_OVERLAY;
+    SinglePeekView view = settings_get_single_peek_view();
+    if (view == SINGLE_PEEK_OVERLAY) {
+      s_mode = FACE_OVERLAY;
+    } else {
+      s_page = (FacePage)(view - 1);  // 1..4 -> PAGE_HOURS..PAGE_SUN_MOON
+      s_mode = FACE_PEEK;
+    }
     prv_arm_idle(PEEK_IDLE_MS);
   } else {
     s_mode = FACE_CLOCK;
@@ -211,6 +233,7 @@ void face_state_prev_page(void) {
     prv_cancel_idle();
   } else {
     s_page = (FacePage)prev;
+    s_deck_pos = prev;
     prv_arm_idle(PEEK_IDLE_MS);
   }
   prv_redraw();

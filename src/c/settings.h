@@ -32,18 +32,15 @@ typedef enum {
   TAP_INPUT_EITHER = 2, // any axis (reliability fallback)
 } TapInputMode;
 
-// Persistent battery indicator on the resting face.
-typedef enum {
-  BATTERY_OFF = 0,
-  BATTERY_ALWAYS = 1,
-  BATTERY_WHEN_LOW = 2, // only at <=20% (or charging) — default
-} BatteryDisplay;
-
 // A reading the user can place in any of the four resting-face slots: two
 // text lines under the date (line 1 / line 2) and two colored pills (badge 1 /
 // badge 2). One menu drives all four; the slot only decides how it's drawn.
 // COMPLICATION_STEPS is line-only — a step count can't fit a pill on the small
 // screens, so the badge pickers omit it and badge slots treat it as Off.
+// COMPLICATION_BATTERY is watch state rather than weather: it replaced the
+// v1.2 always-on battery glyph, so it never draws unless the user assigns it
+// to a slot, and it is exempt from the badge staleness gate (a stale forecast
+// says nothing about the charge level).
 typedef enum {
   COMPLICATION_OFF = 0,
   COMPLICATION_FEELS = 1, // default for line 1 (useful out-of-box reading)
@@ -54,8 +51,22 @@ typedef enum {
   COMPLICATION_STEPS = 6,     // line slots only
   COMPLICATION_DEW = 7,
   COMPLICATION_RAIN_CHANCE = 8, // next ~6h peak precip probability
-  COMPLICATION_MAX = COMPLICATION_RAIN_CHANCE,
+  COMPLICATION_BATTERY = 9,     // watch charge level (+ charging state)
+  COMPLICATION_MAX = COMPLICATION_BATTERY,
 } ComplicationSlot;
+
+// What a Single-peek nudge actually shows. The mode used to mandate the dense
+// everything-overlay; now that is just the default, and the user can pin any
+// one peek page instead. Independent of the Peek Pages toggles — those deal
+// the Nudge Deck / Auto-rotate decks, while this is one fixed view.
+typedef enum {
+  SINGLE_PEEK_OVERLAY = 0,  // dense everything-overlay (default)
+  SINGLE_PEEK_HOURS = 1,    // 1..4 == FacePage + 1
+  SINGLE_PEEK_WEEK = 2,
+  SINGLE_PEEK_CONDITIONS = 3,
+  SINGLE_PEEK_SUN_MOON = 4,
+  SINGLE_PEEK_MAX = SINGLE_PEEK_SUN_MOON,
+} SinglePeekView;
 
 // The bottom status row ("UPDATED 5M AGO"). Permanent by default; an imminent
 // -rain alert takes the row over in every mode, including UPDATED_NEVER.
@@ -67,10 +78,6 @@ typedef enum {
 
 void settings_init(void);
 
-// Big Mode: opt-in accessibility mode (much larger fonts + high-contrast
-// colors). Drives theme.c/ui.c/face_fonts.c. Off by default.
-bool settings_get_big_mode(void);
-void settings_set_big_mode(bool on);
 bool settings_get_animations_enabled(void);
 void settings_set_animations_enabled(bool on);
 
@@ -104,9 +111,6 @@ void settings_set_day_theme(int theme);
 TapInputMode settings_get_tap_input_mode(void);   // default TAP_INPUT_WRIST
 void settings_set_tap_input_mode(TapInputMode mode);
 
-BatteryDisplay settings_get_battery_display(void); // default BATTERY_WHEN_LOW
-void settings_set_battery_display(BatteryDisplay mode);
-
 // Line slot 1 — text under the date. Default COMPLICATION_FEELS.
 ComplicationSlot settings_get_complication(void);
 void settings_set_complication(ComplicationSlot slot);
@@ -136,3 +140,6 @@ void settings_set_badge2_notable(bool on);
 
 UpdatedDisplay settings_get_updated_display(void); // default UPDATED_ALWAYS
 void settings_set_updated_display(UpdatedDisplay mode);
+
+SinglePeekView settings_get_single_peek_view(void); // default SINGLE_PEEK_OVERLAY
+void settings_set_single_peek_view(SinglePeekView view);

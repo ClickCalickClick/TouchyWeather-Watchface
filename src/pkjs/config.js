@@ -5,7 +5,7 @@ module.exports = [
   },
   {
     "type": "text",
-    "defaultValue": "The weather watch face with a whole deck under the glass. Nudge the watch (flick your wrist or firmly tap the glass) to page through your weather."
+    "defaultValue": "The weather watch face with a whole deck under the glass. Nudge the watch — a flick of the wrist — to page through your weather. (Prefer a firm tap on the watch? Switch the nudge input below.)"
   },
   {
     "type": "section",
@@ -26,13 +26,6 @@ module.exports = [
       },
       {
         "type": "toggle",
-        "messageKey": "BigMode",
-        "label": "Big Mode",
-        "description": "Accessibility mode for easier reading: much larger fonts and high-contrast colors across the whole face.",
-        "defaultValue": false
-      },
-      {
-        "type": "toggle",
         "messageKey": "AnimationsEnabled",
         "label": "Animations",
         "description": "Animate the weather icon after a nudge or fresh data, settling to a static frame a few seconds later to save battery.",
@@ -49,7 +42,7 @@ module.exports = [
       },
       {
         "type": "text",
-        "defaultValue": "Four slots you can fill with any reading: two text lines under the date, and two colored pills below the weather. Whatever you leave off, the rest of the face grows to fill the space."
+        "defaultValue": "Four slots you can fill with any reading — weather, step count or the watch battery: two text lines under the date, and two colored pills below the weather. Whatever you leave off, the rest of the face grows to fill the space."
       },
       {
         "type": "faceSchematic",
@@ -72,7 +65,8 @@ module.exports = [
           { "label": "UV index", "value": "4" },
           { "label": "Air quality", "value": "5" },
           { "label": "Rain chance", "value": "8" },
-          { "label": "Step count", "value": "6" }
+          { "label": "Step count", "value": "6" },
+          { "label": "Watch battery", "value": "9" }
         ]
       },
       {
@@ -90,7 +84,8 @@ module.exports = [
           { "label": "UV index", "value": "4" },
           { "label": "Air quality", "value": "5" },
           { "label": "Rain chance", "value": "8" },
-          { "label": "Step count", "value": "6" }
+          { "label": "Step count", "value": "6" },
+          { "label": "Watch battery", "value": "9" }
         ]
       },
       {
@@ -107,14 +102,15 @@ module.exports = [
           { "label": "Humidity", "value": "3" },
           { "label": "Dew point", "value": "7" },
           { "label": "UV index", "value": "4" },
-          { "label": "Air quality", "value": "5" }
+          { "label": "Air quality", "value": "5" },
+          { "label": "Watch battery", "value": "9" }
         ]
       },
       {
         "type": "toggle",
         "messageKey": "Badge1Notable",
         "label": "Badge 1 only when notable",
-        "description": "Hide this pill unless the reading is worth a look — rain at 50% or more, UV 6+ around midday, air quality above 100, and similar thresholds for the other readings.",
+        "description": "Hide this pill unless the reading is worth a look — rain at 50% or more, UV 6+ around midday, air quality above 100, watch battery at 20% or less (or charging), and similar thresholds for the other readings.",
         "defaultValue": false
       },
       {
@@ -131,7 +127,8 @@ module.exports = [
           { "label": "Humidity", "value": "3" },
           { "label": "Dew point", "value": "7" },
           { "label": "UV index", "value": "4" },
-          { "label": "Air quality", "value": "5" }
+          { "label": "Air quality", "value": "5" },
+          { "label": "Watch battery", "value": "9" }
         ]
       },
       {
@@ -152,18 +149,6 @@ module.exports = [
           { "label": "Only when stale", "value": "1" },
           { "label": "Off", "value": "2" }
         ]
-      },
-      {
-        "type": "select",
-        "messageKey": "BatteryDisplay",
-        "label": "Battery indicator",
-        "description": "Show a battery glyph on the clock face. Defaults to only when the battery is low (20% or less) or charging.",
-        "defaultValue": "2",
-        "options": [
-          { "label": "Off", "value": "0" },
-          { "label": "Always show", "value": "1" },
-          { "label": "Only when low", "value": "2" }
-        ]
       }
     ]
   },
@@ -178,13 +163,27 @@ module.exports = [
         "type": "select",
         "messageKey": "GestureMode",
         "label": "What a nudge does",
-        "description": "A nudge is a wrist flick or a firm tap on the watch. Nudge Deck pages through your peek cards; Single peek shows one dense overlay; Auto-rotate cycles pages on a timer with no gestures.",
+        "description": "A nudge is a wrist flick or a firm tap on the watch — pick which under Nudge input. Nudge Deck deals your enabled Peek Pages one per nudge; Single peek shows one fixed view you choose below (Peek Pages don't apply); Auto-rotate cycles the enabled pages on a timer, no nudging needed.",
         "defaultValue": "0",
         "options": [
           { "label": "Nudge Deck (page through cards)", "value": "0" },
           { "label": "Single peek overlay", "value": "1" },
           { "label": "Auto-rotate pages", "value": "2" },
           { "label": "Off (clock only)", "value": "3" }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "SinglePeekView",
+        "label": "Single peek shows",
+        "description": "Which view a Single peek nudge opens. The overlay packs everything onto one screen; pick a single page instead if you only ever want that one. Only applies to the Single peek mode.",
+        "defaultValue": "0",
+        "options": [
+          { "label": "Everything overlay", "value": "0" },
+          { "label": "6 Hours", "value": "1" },
+          { "label": "Week Ahead", "value": "2" },
+          { "label": "Conditions", "value": "3" },
+          { "label": "Sun + Moon", "value": "4" }
         ]
       },
       {
@@ -207,6 +206,11 @@ module.exports = [
       {
         "type": "heading",
         "defaultValue": "Peek Pages"
+      },
+      {
+        "type": "text",
+        "id": "peekPagesNote",
+        "defaultValue": "Used by Nudge Deck and Auto-rotate — not by Single peek or Off."
       },
       {
         "type": "toggle",

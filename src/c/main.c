@@ -77,7 +77,7 @@ static void prv_root_update_proc(Layer *layer, GContext *ctx) {
   grect_standardize(&ub);
   grect_clip(&ub, &bounds);
   if (ub.size.h < bounds.size.h && settings_get_quick_view_reflow()) {
-    if (ub.size.h >= face_layout_min_core_h(settings_get_big_mode())) {
+    if (ub.size.h >= face_layout_min_core_h()) {
       clock_zone_draw_full(ctx, ub);
     } else if (ub.size.h < COMPACT_MIN_H) {
       clock_zone_draw_full(ctx, bounds);
@@ -96,11 +96,15 @@ static void prv_root_update_proc(Layer *layer, GContext *ctx) {
                        bounds.size.w, dots_y - 4 - PEEK_BAND_TOP);
     if (mode == FACE_PEEK) {
       page_draw(face_state_page(), ctx, band);
-      page_draw_indicator(ctx,
-                          GRect(bounds.origin.x, bounds.origin.y + dots_y,
-                                bounds.size.w, 6),
-                          face_state_page_ordinal(),
-                          face_state_enabled_count());
+      // Deck dots say "there are more pages this way". Single peek pins ONE
+      // page, so they would be a lie there.
+      if (settings_get_gesture_mode() != GESTURE_SINGLE_PEEK) {
+        page_draw_indicator(ctx,
+                            GRect(bounds.origin.x, bounds.origin.y + dots_y,
+                                  bounds.size.w, 6),
+                            face_state_page_ordinal(),
+                            face_state_enabled_count());
+      }
     } else {  // FACE_OVERLAY
       overlay_draw(ctx, band);
     }
@@ -193,9 +197,13 @@ static void prv_unobstructed_did_change(void *ctx) {
   prv_mark_dirty();
 }
 
+// Charge/plug changes. The minute tick would pick the new reading up anyway;
+// this only makes a battery complication react the moment the cable goes in
+// (and costs nothing when no slot is showing one — the service is
+// event-driven, not a timer, so the at-rest one-wakeup-per-minute rule holds).
 static void prv_battery_handler(BatteryChargeState state) {
   (void)state;
-  prv_mark_dirty();  // redraw the battery glyph on charge/plug changes
+  prv_mark_dirty();
 }
 
 static void prv_window_load(Window *window) {

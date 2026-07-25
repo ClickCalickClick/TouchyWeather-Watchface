@@ -1,23 +1,18 @@
 #include "face_fonts.h"
 #include "ui.h"
-#include "settings.h"
 
-// See face_fonts.h for the policy. Each accessor: Big Mode branch first (never
-// smaller than the enlarged normal path), then the enlarged normal path on the
+// See face_fonts.h for the policy. Each accessor: the enlarged path on the
 // large screen classes, then a fall-through to the shared ui_font_* on the
 // small classes (which are too tight to grow).
 
 GFont face_font_clock(void) {
-  // The clock is digits + colon only. Big Mode keeps the app's full-height hero
-  // numeral; the normal path uses LECO_42 (the signature thin Pebble clock at
-  // its largest) on every class — including small-rect, where the app's old
+  // The clock is digits + colon only: LECO_42 (the signature thin Pebble clock
+  // at its largest) on every class — including small-rect, where the app's old
   // LECO_36 was for a narrow card column, not this full-width centered face.
-  if (settings_get_big_mode()) return ui_font_number();  // BITHAM_42_BOLD
   return fonts_get_system_font(FONT_KEY_LECO_42_NUMBERS);
 }
 
 GFont face_font_header(void) {
-  if (settings_get_big_mode()) return ui_font_header();  // large 24B (==normal), small 18B
 #if defined(UI_SCREEN_LARGE_RECT) || defined(UI_SCREEN_LARGE_ROUND)
   return fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
 #else
@@ -26,14 +21,8 @@ GFont face_font_header(void) {
 }
 
 GFont face_font_hilo(void) {
-  // Resting-face hi/lo temps. Same size as face_font_header on the NORMAL path
-  // (large: GOTHIC_24_BOLD, small: 18B), but in Big Mode it grows to
-  // GOTHIC_24_BOLD on EVERY class — including the small screens, where the date
-  // and page rows stay compact but the secondary temps should still be legible
-  // in the accessibility mode.
-  if (settings_get_big_mode()) {
-    return fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
-  }
+  // Resting-face hi/lo temps — same size as face_font_header
+  // (large: GOTHIC_24_BOLD, small: 18B).
 #if defined(UI_SCREEN_LARGE_RECT) || defined(UI_SCREEN_LARGE_ROUND)
   return fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
 #else
@@ -42,7 +31,6 @@ GFont face_font_hilo(void) {
 }
 
 GFont face_font_body(void) {
-  if (settings_get_big_mode()) return ui_font_body();  // large 28B (==normal), small 24B
 #if defined(UI_SCREEN_LARGE_RECT) || defined(UI_SCREEN_LARGE_ROUND)
   return fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
 #else
@@ -51,7 +39,6 @@ GFont face_font_body(void) {
 }
 
 GFont face_font_title(void) {
-  if (settings_get_big_mode()) return ui_font_title();  // BITHAM_30_BLACK (==normal on large)
 #if defined(UI_SCREEN_LARGE_RECT) || defined(UI_SCREEN_LARGE_ROUND)
   return fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK);  // has ° / minus
 #else
@@ -62,25 +49,16 @@ GFont face_font_title(void) {
 GFont face_font_hero(void) {
   // Resting-face weather-row temperature. LECO_42_NUMBERS on every class — the
   // same technical numeral as the clock and the companion app's hero temp, and
-  // it carries the ° / minus glyphs. Already the largest numeral, so it also
-  // satisfies the Big-Mode "never smaller than normal" invariant unchanged.
+  // it carries the ° / minus glyphs.
   return fonts_get_system_font(FONT_KEY_LECO_42_NUMBERS);
 }
 
-GFont face_font_label_big(bool big) {
-  // Explicit-tier variant: the resting face's Big-Mode overflow ladder demotes
-  // chrome rows back to the normal tier while the setting is still ON, so it
-  // cannot go through the settings-driven accessors — name the fonts directly.
-  if (big) return fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
+GFont face_font_label(void) {
 #if defined(UI_SCREEN_LARGE_RECT) || defined(UI_SCREEN_LARGE_ROUND)
   return fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
 #else
   return fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD);
 #endif
-}
-
-GFont face_font_label(void) {
-  return face_font_label_big(settings_get_big_mode());
 }
 
 // --- Resting-face tier ramp ---------------------------------------------
@@ -108,6 +86,32 @@ GFont face_font_label(void) {
 #  define XL_RESID RESOURCE_ID_FONT_CLOCK_XL_52
 #endif
 
+// Ink height + top-side leading of each clock tier's numeral, measured from
+// screenshots (see face_font_clock_ink_h in the header). Base = LECO_42 (large)
+// / LECO_36 (small); XL = the bundled Chakra Petch subset at this class's point
+// size. INK drives the flow's TIME-row reservation; RISE lifts the draw box so
+// the glyph, not the layout box, lands on that band.
+#if defined(UI_SCREEN_SMALL_ROUND)      // chalk: LECO_36 base, XL_48 promoted
+#  define FZ_CLOCK_INK_BASE 25
+#  define FZ_CLOCK_RISE_BASE 10
+#  define FZ_CLOCK_INK_XL   34
+#  define FZ_CLOCK_RISE_XL  10
+#elif defined(UI_SCREEN_LARGE_RECT)     // emery: LECO_42 base, XL_56 promoted
+#  define FZ_CLOCK_INK_BASE 29
+#  define FZ_CLOCK_RISE_BASE 12
+#  define FZ_CLOCK_INK_XL   40
+#  define FZ_CLOCK_RISE_XL  12
+#elif defined(UI_SCREEN_LARGE_ROUND)    // gabbro: LECO_42 base, XL_64 promoted
+#  define FZ_CLOCK_INK_BASE 29
+#  define FZ_CLOCK_RISE_BASE 12
+#  define FZ_CLOCK_INK_XL   46
+#  define FZ_CLOCK_RISE_XL  14
+#else                                   // small-rect: LECO_36 base, XL_52 promoted
+#  define FZ_CLOCK_INK_BASE 25
+#  define FZ_CLOCK_RISE_BASE 10
+#  define FZ_CLOCK_INK_XL   37
+#  define FZ_CLOCK_RISE_XL  11
+#endif
 static GFont s_clock_xl = NULL;
 
 GFont face_font_clock_xl(void) {
@@ -127,8 +131,17 @@ void face_fonts_deinit(void) {
   }
 }
 
+int face_font_clock_ink_h(int tier) {
+  if (tier >= FACE_TIER_PROMOTED) return FZ_CLOCK_INK_XL;
+  return FZ_CLOCK_INK_BASE;
+}
+
+int face_font_clock_rise(int tier) {
+  if (tier >= FACE_TIER_PROMOTED) return FZ_CLOCK_RISE_XL;
+  return FZ_CLOCK_RISE_BASE;
+}
+
 GFont face_font_clock_tier(int tier) {
-  if (settings_get_big_mode()) return face_font_clock();
   // Promoted tier is the bundled XL custom face on every class — this is what
   // fills the width when the flow switches optional rows off.
   if (tier >= FACE_TIER_PROMOTED) return face_font_clock_xl();
@@ -143,7 +156,6 @@ GFont face_font_clock_tier(int tier) {
 }
 
 GFont face_font_temp_tier(int tier) {
-  if (settings_get_big_mode()) return face_font_hero();
   if (tier >= FACE_TIER_PROMOTED) {
 #if defined(UI_SCREEN_SMALL_ROUND)
     // Chalk's promoted temp stops at BITHAM_30 — LECO_42 alongside a promoted
@@ -161,7 +173,6 @@ GFont face_font_temp_tier(int tier) {
 }
 
 GFont face_font_hilo_tier(int tier) {
-  if (settings_get_big_mode()) return face_font_hilo();
 #if defined(UI_SCREEN_SMALL_ROUND)
   // The hi/lo pair is two stacked lines, so it drives the weather row's height
   // more than the icon or the temp do. Chalk's 180px circle can't hold the full
@@ -178,7 +189,7 @@ GFont face_font_hilo_tier(int tier) {
 }
 
 int face_icon_size_tier(int tier) {
-  bool up = (tier >= FACE_TIER_PROMOTED) && !settings_get_big_mode();
+  const bool up = (tier >= FACE_TIER_PROMOTED);
 #if defined(UI_SCREEN_LARGE_ROUND)
   return up ? 60 : 52;
 #elif defined(UI_SCREEN_LARGE_RECT)
@@ -191,16 +202,6 @@ int face_icon_size_tier(int tier) {
 }
 
 GFont face_font_caption(void) {
-  // Inversion guard: ui.c's Big Mode caption is GOTHIC_14_BOLD, which is
-  // SMALLER than our enlarged normal (GOTHIC_18) on the large classes — so in
-  // Big Mode on large we lift to GOTHIC_18_BOLD to keep Big Mode >= normal.
-  if (settings_get_big_mode()) {
-#if defined(UI_SCREEN_LARGE_RECT) || defined(UI_SCREEN_LARGE_ROUND)
-    return fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
-#else
-    return ui_font_caption();
-#endif
-  }
 #if defined(UI_SCREEN_LARGE_RECT) || defined(UI_SCREEN_LARGE_ROUND)
   return fonts_get_system_font(FONT_KEY_GOTHIC_18);
 #else

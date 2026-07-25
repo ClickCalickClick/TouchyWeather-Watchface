@@ -33,35 +33,28 @@
 
 // Base-tier heights of the three rows that are always present. Kept here (not
 // measured) so main.c can ask for the minimum stack height before a draw
-// context exists. Generous by a pixel or two rather than tight — an
+// context exists. TIME/DATE are the numerals' INK heights (matching
+// clock_zone.c's ink-true row reservations — the layout box's dead top-side
+// leading is no longer counted); still generous by a pixel or two, since an
 // underestimate would let the Quick View cascade pick the full face for a band
-// that can't hold it. The _BIG variants are the same rows at the Big-Mode ramp
-// (BITHAM_42 clock, GOTHIC_24_BOLD hi/lo pair driving the weather row); the
-// caller passes the mode in so this file stays settings-free.
+// that can't hold it. WEATHER stays the row's reserved height (icon / temp /
+// hi-lo max), which was already ink-based.
 #if defined(UI_SCREEN_LARGE_ROUND)
-  #define FL_CORE_TIME_H   50
-  #define FL_CORE_DATE_H   26
+  #define FL_CORE_TIME_H   30
+  #define FL_CORE_DATE_H   15
   #define FL_CORE_WEATHER_H 52
-  #define FL_CORE_TIME_H_BIG    48
-  #define FL_CORE_WEATHER_H_BIG 54
 #elif defined(UI_SCREEN_LARGE_RECT)
-  #define FL_CORE_TIME_H   50
-  #define FL_CORE_DATE_H   26
+  #define FL_CORE_TIME_H   30
+  #define FL_CORE_DATE_H   15
   #define FL_CORE_WEATHER_H 50
-  #define FL_CORE_TIME_H_BIG    48
-  #define FL_CORE_WEATHER_H_BIG 54
 #elif defined(UI_SCREEN_SMALL_ROUND)
-  #define FL_CORE_TIME_H   42
-  #define FL_CORE_DATE_H   22
+  #define FL_CORE_TIME_H   26
+  #define FL_CORE_DATE_H   12
   #define FL_CORE_WEATHER_H 36
-  #define FL_CORE_TIME_H_BIG    46
-  #define FL_CORE_WEATHER_H_BIG 50
 #else  // UI_SCREEN_SMALL_RECT
-  #define FL_CORE_TIME_H   36
-  #define FL_CORE_DATE_H   22
+  #define FL_CORE_TIME_H   26
+  #define FL_CORE_DATE_H   12
   #define FL_CORE_WEATHER_H 36
-  #define FL_CORE_TIME_H_BIG    46
-  #define FL_CORE_WEATHER_H_BIG 50
 #endif
 
 // Floor for a row's usable width — see face_layout_band_w.
@@ -89,11 +82,9 @@ int face_layout_required_h(const FlowRow rows[FLOW_ROW_COUNT]) {
   return FL_PAD_TOP + FL_PAD_BOTTOM + prv_content_h(rows) + (n - 1) * FL_GAP_MIN;
 }
 
-int face_layout_min_core_h(bool big_mode) {
-  const int time_h = big_mode ? FL_CORE_TIME_H_BIG : FL_CORE_TIME_H;
-  const int weather_h = big_mode ? FL_CORE_WEATHER_H_BIG : FL_CORE_WEATHER_H;
-  return FL_PAD_TOP + FL_PAD_BOTTOM + time_h + FL_CORE_DATE_H + weather_h +
-         2 * FL_GAP_MIN;
+int face_layout_min_core_h(void) {
+  return FL_PAD_TOP + FL_PAD_BOTTOM + FL_CORE_TIME_H + FL_CORE_DATE_H +
+         FL_CORE_WEATHER_H + 2 * FL_GAP_MIN;
 }
 
 #if defined(PBL_ROUND)
@@ -140,6 +131,7 @@ int face_layout_band_w(GRect bounds, int y, int h) {
 bool face_layout_solve(FlowRow rows[FLOW_ROW_COUNT], GRect avail) {
   const int n = prv_present_count(rows);
   const int content = prv_content_h(rows);
+  // PAD is symmetric on every class, so the stack centers perfectly in `avail`.
   const int band_h = avail.size.h - FL_PAD_TOP - FL_PAD_BOTTOM;
   const int gaps = (n > 1) ? (n - 1) : 0;
 

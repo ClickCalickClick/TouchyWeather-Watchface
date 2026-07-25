@@ -10,12 +10,9 @@
 // into ui.c.
 //
 // Each accessor wraps the shared ui_font_* role:
-//   * Normal path: returns a LARGER font on the large screen classes
-//     (LARGE_RECT/emery, LARGE_ROUND/gabbro) where there is vertical slack;
-//     falls through to ui_font_*() on the small classes, which are tight.
-//   * Big Mode: never smaller than the enlarged normal path (the accessibility
-//     invariant). Where ui.c's Big Mode font would be smaller than our new
-//     normal (the caption role on the large classes), we lift it here.
+// Each returns a LARGER font on the large screen classes (LARGE_RECT/emery,
+// LARGE_ROUND/gabbro) where there is vertical slack, and falls through to
+// ui_font_*() on the small classes, which are tight.
 //
 // Call sites in face-only files (clock_zone.c, pages/*.c, overlay.c) switch to
 // face_font_* only where the size matrix bumps them; everything else keeps
@@ -23,16 +20,12 @@
 
 GFont face_font_clock(void);    // hero time digits (LECO_42 — the classic look)
 GFont face_font_header(void);   // date, page rows, overlay values
-GFont face_font_hilo(void);     // resting-face hi/lo temps — like header, but Big
-                                // Mode grows a tier on the small classes too
+GFont face_font_hilo(void);     // resting-face hi/lo temps — like header
 GFont face_font_body(void);     // large body copy (conditions FEELS)
 GFont face_font_title(void);    // card/overlay titles (needs ° / minus)
 GFont face_font_hero(void);     // resting-face weather-row temp — LECO_42 hero
                                 // (matches the clock + companion app; has °)
 GFont face_font_label(void);    // small bold labels / badges / complication
-GFont face_font_label_big(bool big);  // label at an EXPLICIT tier — the Big-Mode
-                                // overflow ladder demotes chrome rows to the
-                                // normal tier while the setting is still on
 GFont face_font_caption(void);  // muted captions / cell labels
 
 // --- Resting-face tier ramp (flow layout) ---
@@ -42,9 +35,6 @@ GFont face_font_caption(void);  // muted captions / cell labels
 //
 //   FACE_TIER_BASE      the whole six-row stack fits on every screen class
 //   FACE_TIER_PROMOTED  chosen only when the solver proves it still fits
-//
-// Big Mode never promotes (its own ramp is already the accessibility ceiling),
-// so these accessors return the Big-Mode font at both tiers.
 #define FACE_TIER_BASE     0
 #define FACE_TIER_PROMOTED 1
 
@@ -52,6 +42,17 @@ GFont face_font_clock_tier(int tier);  // hero time digits
 GFont face_font_temp_tier(int tier);   // weather-row temperature
 GFont face_font_hilo_tier(int tier);   // weather-row hi/lo pair
 int   face_icon_size_tier(int tier);   // weather-row condition/moon icon edge
+
+// The clock's VISIBLE ink height and top-side internal leading at a given tier,
+// mirroring face_font_clock_tier's branch structure (promoted XL / base, per
+// screen class). The flow reserves the ink height for the TIME row —
+// NOT the font's layout box, whose top-side leading (15px on LECO_42) is dead
+// space that pushed the whole stack down and made the resting face top-heavy.
+// The rise is subtracted from the draw box so the visible digits — not the
+// layout box — land on the reserved band. The clock is digits + colon only, so
+// both are constant per font and need no per-frame measurement.
+int face_font_clock_ink_h(int tier);
+int face_font_clock_rise(int tier);
 
 // The promoted TIME tier is a bundled custom OFL numeral (the first custom font
 // in the repo). It is lazy-loaded into a single static handle the first time

@@ -5,74 +5,30 @@
 #include <stdio.h>
 #include <time.h>
 
-// --- Font role accessors (Phase 3.1 Stage A + Phase 5 screen class + Stage B scale) ---
-// One accessor per distinct font role. Each carries three axes, resolved here
-// so call sites never change:
-//   1. Stage A  — the base font role (verbatim current look, the "Normal" path).
-//   2. Phase 5  — compile-time screen class (#if UI_SCREEN_*), for platform fit.
-//   3. Stage B  — the RUNTIME Big Mode scale axis (this file's new branch).
-// Big Mode is a runtime toggle (settings_get_big_mode()), NOT compile-time like
-// the screen class, so this is a real runtime branch. The invariant: when Big
-// Mode is OFF the else-path returns the EXACT font it did before, so every
-// platform renders pixel-identical to pre-Stage-B (verified by screenshot, since
-// the added branch means the binary is no longer byte-identical).
-//
-// Big-Mode font map (per the Fable UI plan): bump each role a tier for
-// readability, holding the small screen classes back where a bigger font would
-// not fit the shorter 144/180px height.
+// --- Font role accessors (Phase 3.1 Stage A + Phase 5 screen class) ---
+// One accessor per distinct font role, carrying two axes so call sites never
+// change: the base font role, and the compile-time screen class
+// (#if UI_SCREEN_*) for platform fit. The face's own ramp lives in
+// face_fonts.c — enlarge type there, never here.
 GFont ui_font_header(void) {
-  if (settings_get_big_mode()) {
-    // Card titles are chrome, not data. Small classes keep 18B to save the
-    // vertical room the enlarged body/number need; large classes go to 24B.
-#if defined(UI_SCREEN_SMALL_RECT) || defined(UI_SCREEN_SMALL_ROUND)
-    return fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
-#else
-    return fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
-#endif
-  }
   return fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
 }
 GFont ui_font_body(void) {
-  if (settings_get_big_mode()) {
-#if defined(UI_SCREEN_SMALL_RECT) || defined(UI_SCREEN_SMALL_ROUND)
-    return fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
-#else
-    return fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
-#endif
-  }
   return fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
 }
 GFont ui_font_title(void) {
-  // GOTHIC_28_BOLD -> BITHAM_30_BLACK (heavier + slightly larger) in Big Mode.
-  if (settings_get_big_mode())
-    return fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK);
   return fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
 }
 GFont ui_font_label(void) {
-  // GOTHIC_14_BOLD -> GOTHIC_18_BOLD in Big Mode (also enlarges the status pill).
-  if (settings_get_big_mode())
-    return fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
   return fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD);
 }
 GFont ui_font_caption(void) {
-  // GOTHIC_14 -> GOTHIC_14_BOLD in Big Mode (same size, more weight for legibility).
-  if (settings_get_big_mode())
-    return fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD);
   return fonts_get_system_font(FONT_KEY_GOTHIC_14);
 }
 GFont ui_font_number(void) {
-  // Hero numerals (temp, UV, AQI).
-  if (settings_get_big_mode()) {
-    // Big Mode hero numeral. BITHAM_42_BOLD is a FULL font — unlike the LECO /
-    // ROBOTO subset numeral fonts it carries the degree and minus glyphs, so a
-    // temperature ("72°") or a sub-zero value ("-5°") renders with no tofu and
-    // needs no per-sign fallback. Heavier than LECO_42 at the same nominal size;
-    // the readability gain in Big Mode also comes from the simplified layouts.
-    return fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD);
-  }
-  // Normal path (verbatim). LECO_42 is tuned for the large screens; on the 144px
-  // small-rect class it overflows its box (main-card temp clips to "6..."), so
-  // drop to a smaller LECO there. Large classes keep the verbatim LECO_42.
+  // Hero numerals (temp, UV, AQI). LECO_42 is tuned for the large screens; on
+  // the 144px small-rect class it overflows its box (main-card temp clips to
+  // "6..."), so drop to a smaller LECO there.
 #if defined(UI_SCREEN_SMALL_RECT)
   return fonts_get_system_font(FONT_KEY_LECO_36_BOLD_NUMBERS);
 #else
@@ -144,12 +100,8 @@ bool ui_draw_status_banner(GContext *ctx, GRect bounds,
 #else  // UI_SCREEN_SMALL_RECT
   int pad_bottom = 20;
 #endif
-  // Big Mode: a taller, wider pill so the 18px label (ui_font_label bumps to
-  // GOTHIC_18_BOLD in Big Mode) has room. The text rect derives from banner_h,
-  // so it follows automatically. Normal path unchanged -> pixel-identical.
-  bool big = settings_get_big_mode();
-  int banner_h = big ? 28 : 22;
-  int banner_w = PBL_IF_ROUND_ELSE(140, 130) + (big ? 20 : 0);
+  int banner_h = 22;
+  int banner_w = PBL_IF_ROUND_ELSE(140, 130);
   GRect r = GRect(bounds.origin.x + (bounds.size.w - banner_w) / 2,
                   bounds.origin.y + bounds.size.h - pad_bottom - banner_h,
                   banner_w, banner_h);
@@ -164,13 +116,7 @@ bool ui_draw_status_banner(GContext *ctx, GRect bounds,
   GColor pill_bg = (mode == STATUS_BANNER_RAIN)
                    ? theme_accent_orange()
                    : theme_muted();
-  // Rain text is black on the orange pill — but Big Mode collapses the accent
-  // to theme_fg() (its high-contrast policy), so on light theme the pill turns
-  // black and black text vanishes. When collapsed, invert the text to the
-  // background so the rain alert stays legible in the accessibility mode.
-  GColor txt_color = (mode == STATUS_BANNER_RAIN)
-                     ? (settings_get_big_mode() ? theme_bg() : GColorBlack)
-                     : theme_fg();
+  GColor txt_color = (mode == STATUS_BANNER_RAIN) ? GColorBlack : theme_fg();
 #endif
 
   graphics_context_set_fill_color(ctx, pill_bg);

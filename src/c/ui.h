@@ -3,7 +3,8 @@
 
 // --- Screen-class axis (Phase 5) ---
 //
-// The second axis the Stage A accessors branch on (scale/Big Mode is the
+// The second axis the Stage A accessors branch on (the face's own type ramp
+// lives in face_fonts.c; this is the
 // third, added later). Determined ENTIRELY at compile time from the SDK's
 // own per-platform defines (PBL_ROUND + PBL_DISPLAY_WIDTH), so it costs
 // nothing at runtime and matches the existing PBL_IF_ROUND_ELSE idiom.
