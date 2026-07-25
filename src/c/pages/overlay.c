@@ -1,6 +1,7 @@
 #include "pages.h"
 #include "../theme.h"
 #include "../ui.h"
+#include "../face_fonts.h"
 #include "../icons.h"
 #include "../settings.h"
 #include "../weather_data.h"
@@ -60,9 +61,11 @@ void overlay_draw(GContext *ctx, GRect bounds) {
 #if defined(UI_SCREEN_SMALL_RECT) || defined(UI_SCREEN_SMALL_ROUND)
   const bool show_header = false;
   const int cell_h = 26;
+  const int lbl_y = -3, lbl_h = 16, val_y = 9, val_h = 22;
 #else
   const bool show_header = true;
-  const int cell_h = 36;
+  const int cell_h = 38;
+  const int lbl_y = -4, lbl_h = 18, val_y = 12, val_h = 26;
 #endif
   int header_h = show_header ? 20 : 0;
   int grid_h = header_h + 3 * cell_h;
@@ -71,7 +74,7 @@ void overlay_draw(GContext *ctx, GRect bounds) {
 
   if (show_header) {
     graphics_context_set_text_color(ctx, theme_secondary());
-    graphics_draw_text(ctx, "RIGHT NOW", ui_font_label(),
+    graphics_draw_text(ctx, "RIGHT NOW", face_font_label(),
                        GRect(ox, y - 2, W, 18),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter,
                        NULL);
@@ -89,13 +92,13 @@ void overlay_draw(GContext *ctx, GRect bounds) {
     int cx = ox + margin + col * col_w;
     int cy = y + row * cell_h;
     graphics_context_set_text_color(ctx, theme_secondary());
-    graphics_draw_text(ctx, cells[i].label, ui_font_caption(),
-                       GRect(cx, cy - 3, col_w, 16),
+    graphics_draw_text(ctx, cells[i].label, face_font_caption(),
+                       GRect(cx, cy + lbl_y, col_w, lbl_h),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter,
                        NULL);
     graphics_context_set_text_color(ctx, cells[i].color);
-    graphics_draw_text(ctx, cells[i].value, ui_font_header(),
-                       GRect(cx, cy + 9, col_w, 22),
+    graphics_draw_text(ctx, cells[i].value, face_font_header(),
+                       GRect(cx, cy + val_y, col_w, val_h),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter,
                        NULL);
   }

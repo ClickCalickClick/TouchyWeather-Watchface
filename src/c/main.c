@@ -5,6 +5,8 @@
 #include "weather_data.h"
 #include "anim.h"
 #include "clock_zone.h"
+#include "face_layout.h"
+#include "face_fonts.h"
 #include "face_state.h"
 #include "gesture.h"
 #include "comm.h"
@@ -45,17 +47,43 @@ static void prv_mark_dirty(void) {
   #define PEEK_DOTS_Y(H)  ((H) - 64)
 #endif
 
+// Reflow threshold for the one-line compact fallback (rect draws at ub.y+2 in a
+// 30px box; round at ub.y+UI_HEADER_Y). The full face's minimum comes from
+// face_layout_min_core_h() — the flow layout is the single source of truth for
+// how much room the real face needs, so there is no anchor table to keep in
+// lockstep here any more. COMPACT_MIN_H is below that minimum on every class,
+// which keeps the cascade well-ordered.
+#define COMPACT_MIN_H PBL_IF_ROUND_ELSE(56, 34)
+
 static void prv_root_update_proc(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   WeatherData *d = weather_data_get();
   int H = bounds.size.h;
   FaceMode mode = face_state_mode();
 
-  // Quick View reflow: when a timeline event obstructs the bottom, degrade
-  // to the compact time+temp line inside the unobstructed area.
+  // Quick View: while a timeline event obstructs the bottom, skip the mode
+  // dispatch and the status pill (both draw into the obstructed region) and show
+  // the clock instead. Never trust the reported rect verbatim — some firmwares
+  // (seen on Core Devices PebbleOS with the calendar Quick View) hand back a
+  // degenerate or shifted rect; standardize and clip it to our own bounds first.
+  // Then pick by how much room is left, so the time is visible whenever it can be
+  // and the face is never blank:
+  //   - room for the core stack    -> the real face, reflowed INTO `ub` (the
+  //     flow sheds its optional rows to fit rather than hiding under the card)
+  //   - only a sliver              -> the one-line compact time+temp inside `ub`
+  //   - degenerate (near-zero)     -> full face on full bounds; nothing else
+  //     would show
   GRect ub = layer_get_unobstructed_bounds(layer);
+  grect_standardize(&ub);
+  grect_clip(&ub, &bounds);
   if (ub.size.h < bounds.size.h && settings_get_quick_view_reflow()) {
-    clock_zone_draw_compact(ctx, ub);
+    if (ub.size.h >= face_layout_min_core_h()) {
+      clock_zone_draw_full(ctx, ub);
+    } else if (ub.size.h < COMPACT_MIN_H) {
+      clock_zone_draw_full(ctx, bounds);
+    } else {
+      clock_zone_draw_compact(ctx, ub);
+    }
     return;
   }
 
@@ -68,27 +96,42 @@ static void prv_root_update_proc(Layer *layer, GContext *ctx) {
                        bounds.size.w, dots_y - 4 - PEEK_BAND_TOP);
     if (mode == FACE_PEEK) {
       page_draw(face_state_page(), ctx, band);
-      page_draw_indicator(ctx,
-                          GRect(bounds.origin.x, bounds.origin.y + dots_y,
-                                bounds.size.w, 6),
-                          face_state_page_ordinal(),
-                          face_state_enabled_count());
+      // Deck dots say "there are more pages this way". Single peek pins ONE
+      // page, so they would be a lie there.
+      if (settings_get_gesture_mode() != GESTURE_SINGLE_PEEK) {
+        page_draw_indicator(ctx,
+                            GRect(bounds.origin.x, bounds.origin.y + dots_y,
+                                  bounds.size.w, 6),
+                            face_state_page_ordinal(),
+                            face_state_enabled_count());
+      }
     } else {  // FACE_OVERLAY
       overlay_draw(ctx, band);
     }
   }
 
-  StatusBannerMode banner_mode =
-      (d->rain_alert_min >= 0 && !s_banner_alt) ? STATUS_BANNER_RAIN
-                                                : STATUS_BANNER_UPDATED;
-  ui_draw_status_banner(ctx, bounds, banner_mode, d->rain_alert_min,
-                        d->last_updated);
+  // Status pill for the PEEK/OVERLAY modes only — in CLOCK mode the resting
+  // face draws its own status row inside the flow (which is what lets the user
+  // make it permanent, and lets the stack recenter when they turn it off), so
+  // drawing ui.c's bottom-anchored banner here too would double it. On a peek
+  // the rule stays what it always was: a rain alert always shows, and the
+  // last-updated stamp only once the data is actually stale.
+  if (mode != FACE_CLOCK) {
+    bool rain = (d->rain_alert_min >= 0);
+    if (rain || comm_data_is_stale()) {
+      StatusBannerMode banner_mode =
+          (rain && !s_banner_alt) ? STATUS_BANNER_RAIN : STATUS_BANNER_UPDATED;
+      ui_draw_status_banner(ctx, bounds, banner_mode, d->rain_alert_min,
+                            d->last_updated);
+    }
+  }
 }
 
 static void prv_banner_tick(void *ctx) {
   (void)ctx;
   s_banner_timer = NULL;
   s_banner_alt = !s_banner_alt;
+  clock_zone_toggle_status_alt();  // the resting face's own status row
   prv_mark_dirty();
   if (weather_data_get()->rain_alert_min >= 0) {
     s_banner_timer = app_timer_register(BANNER_FLIP_MS, prv_banner_tick, NULL);
@@ -100,6 +143,7 @@ static void prv_banner_reconcile(void) {
   bool want = weather_data_get()->rain_alert_min >= 0;
   if (want && !s_banner_timer) {
     s_banner_alt = false;  // lead with the rain pill
+    clock_zone_reset_status_alt();
     s_banner_timer = app_timer_register(BANNER_FLIP_MS, prv_banner_tick, NULL);
   } else if (!want && s_banner_timer) {
     app_timer_cancel(s_banner_timer);
@@ -145,9 +189,21 @@ static void prv_unobstructed_change(AnimationProgress progress, void *ctx) {
   prv_mark_dirty();
 }
 
+// Redraw once the obstruction settles. `change` fires per animation frame, but
+// a firmware that snaps the obstruction in without animating may never call it;
+// did_change is the timer-free net that guarantees a final redraw either way.
+static void prv_unobstructed_did_change(void *ctx) {
+  (void)ctx;
+  prv_mark_dirty();
+}
+
+// Charge/plug changes. The minute tick would pick the new reading up anyway;
+// this only makes a battery complication react the moment the cable goes in
+// (and costs nothing when no slot is showing one — the service is
+// event-driven, not a timer, so the at-rest one-wakeup-per-minute rule holds).
 static void prv_battery_handler(BatteryChargeState state) {
   (void)state;
-  prv_mark_dirty();  // redraw the battery glyph on charge/plug changes
+  prv_mark_dirty();
 }
 
 static void prv_window_load(Window *window) {
@@ -160,6 +216,7 @@ static void prv_window_load(Window *window) {
 
   UnobstructedAreaHandlers handlers = {
     .change = prv_unobstructed_change,
+    .did_change = prv_unobstructed_did_change,
   };
   unobstructed_area_service_subscribe(handlers, NULL);
 }
@@ -211,6 +268,7 @@ static void prv_deinit(void) {
   anim_deinit();
   gesture_deinit();
   face_state_deinit();
+  face_fonts_deinit();  // release the lazily-loaded custom XL clock face
   window_destroy(s_window);
 }
 

@@ -89,10 +89,6 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
     settings_set_night_mode(prv_tuple_bool(t));
     config_changed = true;
   }
-  if ((t = dict_find(iter, MESSAGE_KEY_UVBadge))) {
-    settings_set_uv_badge(prv_tuple_bool(t));
-    config_changed = true;
-  }
   if ((t = dict_find(iter, MESSAGE_KEY_QuickViewReflow))) {
     settings_set_quick_view_reflow(prv_tuple_bool(t));
     config_changed = true;
@@ -101,12 +97,36 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
     settings_set_tap_input_mode((TapInputMode)prv_tuple_int(t));
     config_changed = true;
   }
-  if ((t = dict_find(iter, MESSAGE_KEY_BatteryDisplay))) {
-    settings_set_battery_display((BatteryDisplay)prv_tuple_int(t));
-    config_changed = true;
-  }
   if ((t = dict_find(iter, MESSAGE_KEY_Complication))) {
     settings_set_complication((ComplicationSlot)prv_tuple_int(t));
+    config_changed = true;
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_Complication2))) {
+    settings_set_complication2((ComplicationSlot)prv_tuple_int(t));
+    config_changed = true;
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_BadgeComp1))) {
+    settings_set_badge1((ComplicationSlot)prv_tuple_int(t));
+    config_changed = true;
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_BadgeComp2))) {
+    settings_set_badge2((ComplicationSlot)prv_tuple_int(t));
+    config_changed = true;
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_Badge1Notable))) {
+    settings_set_badge1_notable(prv_tuple_bool(t));
+    config_changed = true;
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_Badge2Notable))) {
+    settings_set_badge2_notable(prv_tuple_bool(t));
+    config_changed = true;
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_UpdatedDisplay))) {
+    settings_set_updated_display((UpdatedDisplay)prv_tuple_int(t));
+    config_changed = true;
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_SinglePeekView))) {
+    settings_set_single_peek_view((SinglePeekView)prv_tuple_int(t));
     config_changed = true;
   }
   if ((t = dict_find(iter, MESSAGE_KEY_UseDewPoint))) {
@@ -258,6 +278,16 @@ void comm_check_staleness(void) {
   }
 }
 
+// True when the on-screen data is old enough that the face should surface the
+// "last updated" pill (same threshold as the refetch trigger), or when we have
+// never received a real update. Lets the resting face keep a clean bottom while
+// data is fresh and only flag staleness when it matters.
+bool comm_data_is_stale(void) {
+  WeatherData *d = weather_data_get();
+  if (!d->valid || d->last_updated == 0) return true;
+  return ((uint32_t)time(NULL) - d->last_updated) > STALE_REFETCH_SECS;
+}
+
 static void prv_initial_refresh(void *ctx) {
   (void)ctx;
   WeatherData *d = weather_data_get();
@@ -271,7 +301,19 @@ static void prv_initial_refresh(void *ctx) {
 void comm_load_cache(void) {
   if (persist_exists(PERSIST_KEY_CACHE)) {
     WeatherData *d = weather_data_get();
-    persist_read_data(PERSIST_KEY_CACHE, d, sizeof(WeatherData));
+    // Only accept a blob that is exactly the struct we expect. A short read
+    // leaves the tail of WeatherData holding whatever was in memory — including
+    // a `valid` flag and unterminated strings — which the face then formats and
+    // parses, and that crashes. Real causes: an interrupted write, or an update
+    // whose WeatherData layout changed without the key being bumped. Dropping a
+    // cache we cannot trust just means one refresh with no stale reading shown.
+    int stored = persist_get_size(PERSIST_KEY_CACHE);
+    if (stored == (int)sizeof(WeatherData)) {
+      persist_read_data(PERSIST_KEY_CACHE, d, sizeof(WeatherData));
+    } else {
+      persist_delete(PERSIST_KEY_CACHE);
+      d->valid = false;
+    }
   }
   if (s_update_cb && weather_data_get()->valid) {
     s_update_cb();

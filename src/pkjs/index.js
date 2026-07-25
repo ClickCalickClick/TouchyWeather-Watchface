@@ -5,7 +5,12 @@
 
 var Clay = require('@rebble/clay');
 var clayConfig = require('./config');
-var clay = new Clay(clayConfig, null, { autoHandleEvents: false });
+// Phase 8: live resting-face schematic in the phone settings. The customFn
+// (face_preview) wires change listeners; the faceSchematic component draws it.
+// Must be registered before generateUrl().
+var clay = new Clay(clayConfig, require('./face_preview'),
+                    { autoHandleEvents: false });
+clay.registerComponent(require('./face_schematic'));
 
 var COND = {
   SUNNY: 0, PARTLY_CLOUDY: 1, CLOUDY: 2, RAIN: 3, SNOW: 4, STORM: 5, FOG: 6

@@ -53,15 +53,10 @@ GColor theme_muted(void) {
 // (LightGray on white) is unreadable for actual text. Use this for any
 // body text that needs to be de-emphasized but still legible.
 GColor theme_secondary(void) {
-  // Big Mode (Stage B): high-contrast policy — de-emphasized body text is a
-  // low-vision liability, so collapse it to full-contrast fg. (theme_muted is
-  // deliberately NOT collapsed: it drives the inactive page-indicator dots,
-  // which must stay distinct from the fg active dot.)
-  if (settings_get_big_mode()) return theme_fg();
   return s_mode == THEME_DARK ? GColorLightGray : GColorDarkGray;
 }
 
-// --- Accent colors (Phase 5: B&W fallback; Stage B: Big-Mode high contrast) ---
+// --- Accent colors (Phase 5: B&W fallback) ---
 // On 1-bit (aplite/diorite/flint) the SDK auto-reduces these accents to
 // GColorWhite, which is INVISIBLE on the light theme's white background
 // (the hi/lo temps, arrows, gauges and chart lines vanished on diorite).
@@ -70,29 +65,16 @@ GColor theme_secondary(void) {
 // differentiation is lost on B&W (all accents read as fg); elements that
 // relied on hue for meaning are already differentiated by shape (up/down
 // arrows, distinct icons, chart markers). Color platforms are unchanged.
-//
-// Big Mode (Stage B) applies the SAME collapse-to-fg on COLOR platforms: the
-// high-contrast policy prioritizes strong figure/ground and colour-independent
-// legibility over hue, and the Big-Mode card layouts already carry meaning by
-// shape (↑/↓ arrows, distinct icons) — the same reason the B&W fallback is
-// safe. A card that genuinely needs a hue to BE the data (e.g. the AQI category
-// colour) can opt back out locally.
 GColor theme_accent_orange(void) {
-  // ~#FFAA00 — Pebble's chrome yellow / orange
-  if (settings_get_big_mode()) return theme_fg();
-  return PBL_IF_COLOR_ELSE(GColorChromeYellow, theme_fg());
+  return PBL_IF_COLOR_ELSE(GColorChromeYellow, theme_fg());  // ~#FFAA00
 }
 
 GColor theme_accent_blue(void) {
-  // ~#00AAFF — bright cyan/blue
-  if (settings_get_big_mode()) return theme_fg();
-  return PBL_IF_COLOR_ELSE(GColorVividCerulean, theme_fg());
+  return PBL_IF_COLOR_ELSE(GColorVividCerulean, theme_fg());  // ~#00AAFF
 }
 
 GColor theme_accent_advice(void) {
-  // Purple (GColorVividViolet) — distinct from orange (sunrise/UV/banner)
-  // and blue (sunset/precip/AQ). Readable on both dark and light backgrounds.
-  if (settings_get_big_mode()) return theme_fg();
+  // Purple, distinct from orange (sunrise/UV/banner) and blue (sunset/precip/AQ).
   return PBL_IF_COLOR_ELSE(GColorVividViolet, theme_fg());
 }
 

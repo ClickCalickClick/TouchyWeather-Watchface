@@ -32,29 +32,52 @@ typedef enum {
   TAP_INPUT_EITHER = 2, // any axis (reliability fallback)
 } TapInputMode;
 
-// Persistent battery indicator on the resting face.
+// A reading the user can place in any of the four resting-face slots: two
+// text lines under the date (line 1 / line 2) and two colored pills (badge 1 /
+// badge 2). One menu drives all four; the slot only decides how it's drawn.
+// COMPLICATION_STEPS is line-only — a step count can't fit a pill on the small
+// screens, so the badge pickers omit it and badge slots treat it as Off.
+// COMPLICATION_BATTERY is watch state rather than weather: it replaced the
+// v1.2 always-on battery glyph, so it never draws unless the user assigns it
+// to a slot, and it is exempt from the badge staleness gate (a stale forecast
+// says nothing about the charge level).
 typedef enum {
-  BATTERY_OFF = 0,
-  BATTERY_ALWAYS = 1,   // default
-  BATTERY_WHEN_LOW = 2, // only at <=20%
-} BatteryDisplay;
-
-// The one configurable complication slot on the resting face.
-typedef enum {
-  COMPLICATION_OFF = 0, // default — keep the face clean
-  COMPLICATION_FEELS = 1,
+  COMPLICATION_OFF = 0,
+  COMPLICATION_FEELS = 1, // default for line 1 (useful out-of-box reading)
   COMPLICATION_WIND = 2,
   COMPLICATION_HUMIDITY = 3,
   COMPLICATION_UV = 4,
   COMPLICATION_AQI = 5,
-  COMPLICATION_STEPS = 6,
+  COMPLICATION_STEPS = 6,     // line slots only
+  COMPLICATION_DEW = 7,
+  COMPLICATION_RAIN_CHANCE = 8, // next ~6h peak precip probability
+  COMPLICATION_BATTERY = 9,     // watch charge level (+ charging state)
+  COMPLICATION_MAX = COMPLICATION_BATTERY,
 } ComplicationSlot;
+
+// What a Single-peek nudge actually shows. The mode used to mandate the dense
+// everything-overlay; now that is just the default, and the user can pin any
+// one peek page instead. Independent of the Peek Pages toggles — those deal
+// the Nudge Deck / Auto-rotate decks, while this is one fixed view.
+typedef enum {
+  SINGLE_PEEK_OVERLAY = 0,  // dense everything-overlay (default)
+  SINGLE_PEEK_HOURS = 1,    // 1..4 == FacePage + 1
+  SINGLE_PEEK_WEEK = 2,
+  SINGLE_PEEK_CONDITIONS = 3,
+  SINGLE_PEEK_SUN_MOON = 4,
+  SINGLE_PEEK_MAX = SINGLE_PEEK_SUN_MOON,
+} SinglePeekView;
+
+// The bottom status row ("UPDATED 5M AGO"). Permanent by default; an imminent
+// -rain alert takes the row over in every mode, including UPDATED_NEVER.
+typedef enum {
+  UPDATED_ALWAYS = 0,        // default
+  UPDATED_STALE_OR_RAIN = 1, // pre-v1.2 behavior
+  UPDATED_NEVER = 2,
+} UpdatedDisplay;
 
 void settings_init(void);
 
-// Compat shims for the copied modules. The face has no Big Mode; the
-// accessor exists so theme.c/ui.c accent-collapse logic compiles unchanged.
-bool settings_get_big_mode(void);
 bool settings_get_animations_enabled(void);
 void settings_set_animations_enabled(bool on);
 
@@ -72,8 +95,6 @@ bool settings_get_rain_auto_show(void);   // default true
 void settings_set_rain_auto_show(bool on);
 bool settings_get_night_mode(void);       // default false
 void settings_set_night_mode(bool on);
-bool settings_get_uv_badge(void);         // default false
-void settings_set_uv_badge(bool on);
 bool settings_get_quick_view_reflow(void);// default true
 void settings_set_quick_view_reflow(bool on);
 
@@ -90,8 +111,35 @@ void settings_set_day_theme(int theme);
 TapInputMode settings_get_tap_input_mode(void);   // default TAP_INPUT_WRIST
 void settings_set_tap_input_mode(TapInputMode mode);
 
-BatteryDisplay settings_get_battery_display(void); // default BATTERY_ALWAYS
-void settings_set_battery_display(BatteryDisplay mode);
-
-ComplicationSlot settings_get_complication(void);  // default COMPLICATION_OFF
+// Line slot 1 — text under the date. Default COMPLICATION_FEELS.
+ComplicationSlot settings_get_complication(void);
 void settings_set_complication(ComplicationSlot slot);
+
+// Line slot 2. When both line slots are set the resting face draws them
+// side-by-side on the complication line; when only one is set it centers.
+ComplicationSlot settings_get_complication2(void); // default COMPLICATION_OFF
+void settings_set_complication2(ComplicationSlot slot);
+
+// Badge slots — the same readings rendered as colored pills in their own row.
+// Badge 1 defaults to the rain chance (the pre-v1.2 auto badge, now always-on
+// unless the "only when notable" toggle is set).
+ComplicationSlot settings_get_badge1(void);        // default RAIN_CHANCE
+void settings_set_badge1(ComplicationSlot slot);
+ComplicationSlot settings_get_badge2(void);        // default COMPLICATION_OFF
+void settings_set_badge2(ComplicationSlot slot);
+
+// Per-badge "only when notable": when set, the pill hides unless the reading
+// crosses its attention threshold (rain >= 50%, UV >= 6 midday, and so on —
+// see prv_badge_is_notable in clock_zone.c). Off by default: a badge the user
+// picked shows its reading. Upgrading users inherit it ON, which reproduces
+// the old automatic rain/UV badges exactly.
+bool settings_get_badge1_notable(void);            // default false
+void settings_set_badge1_notable(bool on);
+bool settings_get_badge2_notable(void);            // default false
+void settings_set_badge2_notable(bool on);
+
+UpdatedDisplay settings_get_updated_display(void); // default UPDATED_ALWAYS
+void settings_set_updated_display(UpdatedDisplay mode);
+
+SinglePeekView settings_get_single_peek_view(void); // default SINGLE_PEEK_OVERLAY
+void settings_set_single_peek_view(SinglePeekView view);

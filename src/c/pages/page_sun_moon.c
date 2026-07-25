@@ -1,6 +1,7 @@
 #include "pages.h"
 #include "../theme.h"
 #include "../ui.h"
+#include "../face_fonts.h"
 #include "../icons.h"
 #include "../weather_data.h"
 #include <stdio.h>
@@ -17,13 +18,15 @@ void page_sun_moon_draw(GContext *ctx, GRect bounds) {
   int icon_size = 22;
   int row_h = 26;
   int moon_size = 26;
+  int tbox = 22, tdy = 11;
 #else
-  int icon_size = 28;
-  int row_h = 34;
-  int moon_size = 36;
+  int icon_size = 34;
+  int row_h = 40;
+  int moon_size = 44;
+  int tbox = 26, tdy = 13;
 #endif
   const int gap = 8;
-  GFont time_font = ui_font_header();
+  GFont time_font = face_font_header();  // 24B on large — only 2 rows, room to grow
 
   // Left column: sunrise over sunset. Right column: moon disc + illum.
   // Measure the widest time so both rows share one cluster width.
@@ -50,7 +53,7 @@ void page_sun_moon_draw(GContext *ctx, GRect bounds) {
                     icon_size, theme_accent_orange());
   graphics_context_set_text_color(ctx, theme_fg());
   graphics_draw_text(ctx, d->sunrise, time_font,
-      GRect(cx + icon_size + gap, top_y + row_h / 2 - 11, time_w + 4, 22),
+      GRect(cx + icon_size + gap, top_y + row_h / 2 - tdy, time_w + 4, tbox),
       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 
   // Sunset row.
@@ -58,7 +61,7 @@ void page_sun_moon_draw(GContext *ctx, GRect bounds) {
   icon_draw_sunset(ctx, GPoint(cx + icon_size / 2, y2 + row_h / 2),
                    icon_size, theme_accent_blue());
   graphics_draw_text(ctx, d->sunset, time_font,
-      GRect(cx + icon_size + gap, y2 + row_h / 2 - 11, time_w + 4, 22),
+      GRect(cx + icon_size + gap, y2 + row_h / 2 - tdy, time_w + 4, tbox),
       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 
   // Moon column: phase disc centered on the two rows, illum% caption below.
@@ -70,7 +73,7 @@ void page_sun_moon_draw(GContext *ctx, GRect bounds) {
   char illum_buf[8];
   snprintf(illum_buf, sizeof(illum_buf), "%d%%", (int)d->moon_illum);
   graphics_context_set_text_color(ctx, theme_secondary());
-  graphics_draw_text(ctx, illum_buf, ui_font_caption(),
-      GRect(moon_cx - 24, moon_cy + moon_size / 2 + 2, 48, 18),
+  graphics_draw_text(ctx, illum_buf, face_font_caption(),
+      GRect(moon_cx - 30, moon_cy + moon_size / 2 + 2, 60, 20),
       GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 }

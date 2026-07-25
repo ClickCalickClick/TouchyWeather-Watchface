@@ -59,9 +59,3 @@ void icon_draw_moon_phase(GContext *ctx, GPoint center, int size,
 // Phase 8: settings gear and lock icon.
 void icon_draw_settings_gear(GContext *ctx, GPoint center, int size, GColor color);
 void icon_draw_lock_small(GContext *ctx, GPoint center, int size, GColor color);
-
-// Face: battery pill (outline + terminal nub + proportional fill). `size`
-// is the body width; height is derived. `pct` 0..100 sets the fill; when
-// `charging`, a small bolt is overlaid. Low fills use `low_color`.
-void icon_draw_battery(GContext *ctx, GPoint center, int size, int pct,
-                       bool charging, GColor color, GColor low_color);

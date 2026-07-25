@@ -35,10 +35,13 @@ void page_hours_draw(GContext *ctx, GRect bounds) {
   const int icon_size = 14;
   const int row_h = 17;
 #else
+  // 6 rows fill the band, so the row font can't grow a tier without dropping an
+  // hour — keep GOTHIC_18_BOLD and instead enlarge the condition icon/droplet
+  // for legibility, and use the band slack for a touch more row spacing.
   const int rows = 6;
   GFont row_font = ui_font_header();
-  const int icon_size = 16;
-  const int row_h = 21;
+  const int icon_size = 18;
+  const int row_h = 22;
 #endif
   GFont pop_font = ui_font_label();
   const int gap = 6;
@@ -68,7 +71,11 @@ void page_hours_draw(GContext *ctx, GRect bounds) {
     }
   }
 
+#if defined(UI_SCREEN_SMALL_RECT) || defined(UI_SCREEN_SMALL_ROUND)
   const int drop_icon = 10;
+#else
+  const int drop_icon = 12;
+#endif
   int pop_col_w = any_pop ? (drop_icon + 3 + pop_text_w) : 0;
   int cluster_w = time_max.w + gap + icon_size + gap + temp_max.w +
                   (any_pop ? (gap + pop_col_w) : 0);
