@@ -23,3 +23,10 @@ src/pkjs/secrets.js
 # Screenshots from local testing
 /screenshot*.png
 /shot*.png
+
+# Working emulator captures. Only the curated set the README embeds is
+# tracked — everything else is a throwaway from a layout/font/platform sweep
+# and goes stale the moment the face changes. Keep them locally, not in git.
+screenshots/**/*.png
+!screenshots/readme/*.png
+screenshots/platform-review/
