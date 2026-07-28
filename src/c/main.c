@@ -10,6 +10,7 @@
 #include "face_state.h"
 #include "gesture.h"
 #include "comm.h"
+#include "update_notes.h"
 #include "pages/pages.h"
 
 static Window *s_window;
@@ -76,6 +77,16 @@ static void prv_root_update_proc(Layer *layer, GContext *ctx) {
   GRect ub = layer_get_unobstructed_bounds(layer);
   grect_standardize(&ub);
   grect_clip(&ub, &bounds);
+
+  // The show-once update-notes card owns the whole screen, so it is handled
+  // ahead of the Quick View cascade below (which returns early and would
+  // otherwise skip the mode dispatch entirely). It draws into `ub`, so a
+  // timeline card shrinks it rather than hiding it — and it may DECLINE when
+  // there is too little room, in which case we fall through to the normal clock
+  // and the card stays armed for a later frame. It records itself as seen only
+  // once it has actually painted.
+  if (mode == FACE_UPDATE_NOTES && update_notes_draw(ctx, ub)) return;
+
   if (ub.size.h < bounds.size.h && settings_get_quick_view_reflow()) {
     if (ub.size.h >= face_layout_min_core_h()) {
       clock_zone_draw_full(ctx, ub);
@@ -87,7 +98,10 @@ static void prv_root_update_proc(Layer *layer, GContext *ctx) {
     return;
   }
 
-  if (mode == FACE_CLOCK) {
+  // FACE_UPDATE_NOTES joins CLOCK here: if we reach this line in that mode the
+  // card declined to draw (too little unobstructed room), and the clock is the
+  // right fallback — the peek chrome below would draw a page band over nothing.
+  if (mode == FACE_CLOCK || mode == FACE_UPDATE_NOTES) {
     clock_zone_draw_full(ctx, bounds);
   } else {
     clock_zone_draw_compact(ctx, bounds);
@@ -116,7 +130,9 @@ static void prv_root_update_proc(Layer *layer, GContext *ctx) {
   // drawing ui.c's bottom-anchored banner here too would double it. On a peek
   // the rule stays what it always was: a rain alert always shows, and the
   // last-updated stamp only once the data is actually stale.
-  if (mode != FACE_CLOCK) {
+  // PEEK/OVERLAY only — named explicitly rather than "not CLOCK", so the
+  // full-screen update-notes card never gets a banner stamped across it.
+  if (mode == FACE_PEEK || mode == FACE_OVERLAY) {
     bool rain = (d->rain_alert_min >= 0);
     if (rain || comm_data_is_stale()) {
       StatusBannerMode banner_mode =
@@ -251,6 +267,13 @@ static void prv_init(void) {
   gesture_init();
   anim_set_redraw_callback(prv_mark_dirty);
   anim_init();
+
+  // After face_state_init — it resets the mode to CLOCK and may force PEEK for
+  // an auto-rotate user, so the card has to claim the mode once that settled.
+  // settings_init has already latched the fresh-install probe, and the window is
+  // pushed, so the root layer exists to be marked dirty.
+  update_notes_maybe_show();
+
   comm_init();
 
   tick_timer_service_subscribe(MINUTE_UNIT, prv_tick_handler);

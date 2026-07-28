@@ -65,11 +65,13 @@ Single full-screen Layer; `main.c`'s update proc dispatches on
   the whole rect it is given — the face has no out-of-flow chrome left (the
   battery glyph, which used to claim a `top_reserve` band, is gone; the charge
   level is a complication now), so the solve takes no reserve argument.
-  Owns `face_layout_min_core_h(big_mode)`, which main.c's Quick View cascade
-  uses — pass `settings_get_big_mode()`
-  so the taller Big-Mode core is accounted for (the file stays settings-free).
-  There is no longer a per-class anchor table to keep in lockstep. Rows: TIME ·
-  DATE · COMPS · WEATHER · BADGES · UPDATED.
+  Owns `face_layout_min_core_h(void)`, which main.c's Quick View cascade uses.
+  (It took a `big_mode` argument until v1.3 retired Big Mode; the file stays
+  settings-free.) There is no longer a per-class anchor table to keep in
+  lockstep. Rows: TIME · DATE · COMPS · WEATHER · BADGES · UPDATED.
+  `face_layout_band_w(bounds, y, h)` is the reusable chord solver — any
+  full-screen drawer on a round class should clamp each row through it rather
+  than a flat margin (`update_notes.c` does).
 - `clock_zone.c` — resting face: builds the row list, measures each tier, and
   draws every row. Two readings on the complication line draw as ONE centred
   group split by a hairline rule ("FEELS 75° | 12 MPH"), measured so the rule
@@ -117,6 +119,25 @@ Single full-screen Layer; `main.c`'s update proc dispatches on
 - `settings.c` — face settings. Big Mode is GONE (v1.3): the flow layout
   already grows the type as slots are switched off, which is what it was for.
   Retired persist keys are deleted at init (24 battery glyph, 26 Big Mode).
+  Also latches `settings_is_fresh_install()` as the FIRST statement of
+  `settings_init` — `prv_migrate_badges` writes keys 29/31/32/33
+  unconditionally on first run, so after that point every watch looks like an
+  upgrade and the probe is worthless. Anything needing "has this watch run
+  before?" must read the latch, never re-probe.
+- `update_notes.c` — the show-once "New on the horizon" card, ported from the
+  watchapp's `update_notes.c`. Same look (sun, headline, dotted `····v1.3.0····`
+  divider, accent-marked bullets), different machinery: the app pushes a Window,
+  scrolls it and dismisses on BACK, none of which a watchface has. Here it is a
+  `FACE_UPDATE_NOTES` mode drawn into the root layer, dismissed by a nudge, with
+  the peek idle timer as the net. Nothing scrolls, so the body runs a fallback
+  ladder — normal font, then the small font, then drop the tail into "+N more"
+  — and clamps every row through `face_layout_band_w`. Copy comes from
+  `CHANGELOG.md` via the build (see below); the fresh-install welcome is a
+  `#define` in the file. Deliberately draws a STATIC sun: the app's private
+  10 Hz timer breaks the battery rules, and `anim_kick()`'s 8s window would
+  freeze it mid-read. Trigger and persist write both live in
+  `update_notes_maybe_show()` — putting them in the draw path (to survive a
+  Quick View stealing the showing) crashed chalk.
 
 Four complication slots share one menu (`ComplicationSlot`): line 1 / line 2
 draw as text under the date, badge 1 / badge 2 as coloured pills. Steps is
@@ -141,16 +162,43 @@ migration: nothing appears unless they ask for it.
 
 Persist keys: 1 theme (theme.c) · 10–29 settings (24 and 26 retired + deleted
 at init, 29 = badge 1) · 30 weather cache · 31–35 settings continued (badge 2,
-both notable flags, UpdatedDisplay, SinglePeekView). Key 30 sits inside the settings range — never reuse it. Bump
-30's comment trail whenever WeatherData changes layout; `comm_load_cache` also
-rejects any blob whose size doesn't match the struct.
+both notable flags, UpdatedDisplay, SinglePeekView) · 200 legacy theme
+(migrate-then-deleted in theme.c) · **400 last-seen update-notes version**
+(update_notes.c).
+
+Key 30 sits inside the settings range — never reuse it, and never *bump* it.
+An older comment told you to bump it on every WeatherData layout change, the
+app's habit; that is now actively dangerous, because 31 is badge 2 and 32–35
+are settings, so a bump aliases a user's setting to a weather blob. The real
+guard is `comm_load_cache` rejecting any blob whose size doesn't match the
+struct. **400–409 is reserved** for out-of-band state like this — put new
+non-setting keys there, not at the top of the packed low range.
 
 ## Battery rules (enforce when adding timers)
 
 At rest with no rain alert: exactly one wakeup per minute (tick). Every
 AppTimer must be conditional and self-cancelling: anim 10Hz only inside the
 8s post-`anim_kick()` window; banner flip 4s only while `rain_alert_min >= 0`;
-idle-return only in PEEK/OVERLAY; rotate 10s only in AUTO_ROTATE mode.
+idle-return only in PEEK/OVERLAY/UPDATE_NOTES; rotate 10s only in AUTO_ROTATE
+mode.
+
+The update-notes card adds NO timer — it reuses the idle-return one, which is
+why its sun is static. In AUTO_ROTATE only, the rotate and idle timers overlap
+for ≤20s once per release; `prv_rotate_fired` skips its beat while the card is
+up rather than tearing the cadence down, so the deck resumes on dismissal.
+
+## Adding a FaceMode
+
+`FaceMode` has no count sentinel and both consumers in `main.c` are if/else
+chains, so a new value silently falls into the PEEK/OVERLAY branch. Four sites
+in `face_state.c` also overwrite `s_mode` out from under a new mode and each
+needs a guard (`prv_notes_up()` is the existing example): `prv_nudge_deck`
+(its else-branch assumes a peek is up and never assigns `s_mode`),
+`prv_rotate_fired` (unconditional, every 10s), `face_state_apply_mode` (runs on
+EVERY weather payload via `face_state_on_data`, and comm fires one ~750ms after
+launch), and the direct-navigation entry points. `face_state_on_nudge` drops
+nudges for AUTO_ROTATE/OFF, so anything wanting nudge-to-dismiss in all four
+gesture modes must intercept *before* that switch.
 
 ## messageKeys discipline
 
@@ -176,3 +224,20 @@ ANY messageKeys edit, `rm -rf build && pebble build`, then:
 node tools/check-message-keys.js   # phone map vs watch header vs package.json
 node tools/audit-settings.js       # every Clay item -> the C setter that runs it
 ```
+
+## Releasing (CHANGELOG.md drives the version)
+
+`wscript`'s `generate_version_header` parses the top `## x.y.z` block of
+`CHANGELOG.md` into the gitignored `src/c/version_gen.h` on every build:
+`APP_VERSION_CODE` (major*10000 + minor*100 + patch), `APP_VERSION_LABEL`,
+`APP_HAS_UPDATE_NOTES` and `APP_UPDATE_NOTES`. That code is what the show-once
+card compares against persist key 400, so **the CHANGELOG is the version source
+of truth** — not `package.json`, which is only cross-checked (a mismatch warns).
+Nothing else reaches C: `PBL_APP_INFO` is a compile error on the modern SDK,
+and `__pbl_app_info.process_version` omits the semver patch entirely.
+
+So a release is: add a `## x.y.z` block at the top of `CHANGELOG.md`, bump
+`package.json`, rebuild. The build **fails** if the top entry isn't strictly
+greater than the one below it, and warns past 4 bullets or 34 characters
+(the card cannot scroll — see the CHANGELOG's own header for the budget).
+A block with no bullets is a silent release: no card, version still recorded.

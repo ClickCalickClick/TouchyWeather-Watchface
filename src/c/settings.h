@@ -78,6 +78,12 @@ typedef enum {
 
 void settings_init(void);
 
+// True when this launch found NO prior persist key — i.e. a genuinely new watch,
+// not an upgrade. Latched at the top of settings_init before anything writes, so
+// it stays meaningful for the rest of the session. update_notes.c uses it to
+// choose between the welcome card and the release notes.
+bool settings_is_fresh_install(void);
+
 bool settings_get_animations_enabled(void);
 void settings_set_animations_enabled(bool on);
 
