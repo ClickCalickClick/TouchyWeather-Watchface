@@ -169,20 +169,52 @@ static void prv_banner_reconcile(void) {
 }
 
 // Night mode: force the dark theme between sunset and sunrise, restoring
-// the user's day theme after. s_night_theme_applied tracks whether the
-// current dark theme is ours (so we never clobber a deliberate choice).
+// the user's day theme after. s_night_theme_applied tracks whether the current
+// dark theme is ours (so we never clobber a deliberate choice).
+//
+// This MUST be persisted, not RAM-only. theme_set writes the theme to persist,
+// but a watchface is reloaded constantly — open any app and come back and this
+// process restarts. With the flag in RAM only, the second night-time launch
+// read back the forced dark theme, saw the flag clear, and took the "entering
+// night" branch again — which does settings_set_day_theme(theme_get()) and so
+// recorded DARK as the user's *day* theme. Their light preference was destroyed,
+// sunrise "restored" dark, and it looked like a deliberate choice rather than a
+// bug. Persisting the flag keeps the two halves of the override in step.
+//
+// 401, from the out-of-band 400..409 block (see update_notes.c for why new keys
+// go there rather than at the top of the packed 10..35 settings range).
+#define PERSIST_KEY_NIGHT_APPLIED 401
 static bool s_night_theme_applied = false;
+
+static void prv_night_flag_load(void) {
+  s_night_theme_applied = persist_exists(PERSIST_KEY_NIGHT_APPLIED)
+                              ? persist_read_bool(PERSIST_KEY_NIGHT_APPLIED)
+                              : false;
+}
+
+static void prv_night_flag_set(bool applied) {
+  s_night_theme_applied = applied;
+  persist_write_bool(PERSIST_KEY_NIGHT_APPLIED, applied);
+}
 
 static void prv_apply_ambient(void) {
   clock_zone_recompute_night();
   bool want_night_theme = settings_get_night_mode() && clock_zone_is_night();
   if (want_night_theme && !s_night_theme_applied) {
-    settings_set_day_theme((int)theme_get());
+    // Never record DARK as the day theme. Night mode's override is the only way
+    // the theme can already be DARK here with the flag clear, so recording it
+    // would bake the override in as a preference — the exact corruption above.
+    // A user who genuinely prefers dark is unaffected: comm.c writes the day
+    // theme on every Clay theme change, so their real choice is already stored.
+    // This also covers upgrading mid-night, where key 401 is absent and the
+    // flag reads false against an override we set before this build existed.
+    ThemeMode current = theme_get();
+    if (current != THEME_DARK) settings_set_day_theme((int)current);
     theme_set(THEME_DARK);
-    s_night_theme_applied = true;
+    prv_night_flag_set(true);
   } else if (!want_night_theme && s_night_theme_applied) {
     theme_set((ThemeMode)settings_get_day_theme());
-    s_night_theme_applied = false;
+    prv_night_flag_set(false);
   }
 }
 
@@ -252,6 +284,9 @@ static void prv_init(void) {
   comm_set_update_callback(prv_on_data);
   comm_load_cache();
   clock_zone_update_time();
+  // Before the first prv_apply_ambient: it needs to know whether the theme
+  // theme_init just loaded is the user's or a night override we left behind.
+  prv_night_flag_load();
   prv_apply_ambient();
   prv_banner_reconcile();  // the cache may carry an active rain alert
 

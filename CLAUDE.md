@@ -164,7 +164,17 @@ Persist keys: 1 theme (theme.c) · 10–29 settings (24 and 26 retired + deleted
 at init, 29 = badge 1) · 30 weather cache · 31–35 settings continued (badge 2,
 both notable flags, UpdatedDisplay, SinglePeekView) · 200 legacy theme
 (migrate-then-deleted in theme.c) · **400 last-seen update-notes version**
-(update_notes.c).
+(update_notes.c) · **401 night-theme-override applied** (main.c).
+
+Key 401 exists because `theme_set` persists the theme but the "this dark theme
+is *ours*" flag used to be a RAM-only static — and a watchface restarts every
+time the user opens an app and comes back. The second night-time launch read
+back the forced dark theme, saw a clear flag, re-entered the "night starts"
+branch and recorded DARK as the user's *day* theme, destroying their real
+preference; sunrise then "restored" dark forever. Any state that pairs with a
+persisted value has to be persisted too. `prv_apply_ambient` additionally
+refuses to record DARK as a day theme, which is belt-and-braces for the same
+failure and covers upgrading mid-night when 401 is still absent.
 
 Key 30 sits inside the settings range — never reuse it, and never *bump* it.
 An older comment told you to bump it on every WeatherData layout change, the
