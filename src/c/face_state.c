@@ -25,6 +25,11 @@ static void prv_redraw(void) {
   if (s_mark_dirty) s_mark_dirty();
 }
 
+// The update-notes card owns the whole screen and must survive its dwell. Three
+// paths below would otherwise overwrite s_mode underneath it: the auto-rotate
+// tick, the gesture-mode reconciler, and the deck nudge. Each consults this.
+static bool prv_notes_up(void) { return s_mode == FACE_UPDATE_NOTES; }
+
 static void prv_cancel_idle(void) {
   if (s_idle_timer) {
     app_timer_cancel(s_idle_timer);
@@ -65,6 +70,13 @@ static int prv_prev_enabled(int from) {
 static void prv_rotate_fired(void *ctx) {
   (void)ctx;
   s_rotate_timer = NULL;
+  // Skip this beat while the notes card is up, but keep the cadence running so
+  // the deck resumes on its own once the card is dismissed. Without this the
+  // card would be replaced by a peek page within 10s on every auto-rotate user.
+  if (prv_notes_up()) {
+    s_rotate_timer = app_timer_register(AUTO_ROTATE_MS, prv_rotate_fired, NULL);
+    return;
+  }
   int next = prv_next_enabled((int)s_page);
   if (next >= PAGE_COUNT) next = prv_next_enabled(-1);  // wrap
   if (next < PAGE_COUNT) {
@@ -82,17 +94,23 @@ static void prv_rotate_fired(void *ctx) {
 void face_state_apply_mode(void) {
   bool want_rotate = (settings_get_gesture_mode() == GESTURE_AUTO_ROTATE) &&
                      settings_enabled_page_count() > 0;
+  // The timer bookkeeping stays unconditional so a Clay save always reconciles,
+  // but the mode assignments defer to a live notes card — this runs on EVERY
+  // weather payload via face_state_on_data, and comm fires one ~750ms after
+  // launch, right when the card is up.
   if (want_rotate && !s_rotate_timer) {
-    prv_cancel_idle();
-    int first = prv_next_enabled(-1);
-    s_page = (FacePage)first;
-    s_mode = FACE_PEEK;
+    if (!prv_notes_up()) {
+      prv_cancel_idle();
+      int first = prv_next_enabled(-1);
+      s_page = (FacePage)first;
+      s_mode = FACE_PEEK;
+    }
     s_rotate_timer = app_timer_register(AUTO_ROTATE_MS, prv_rotate_fired, NULL);
     prv_redraw();
   } else if (!want_rotate && s_rotate_timer) {
     app_timer_cancel(s_rotate_timer);
     s_rotate_timer = NULL;
-    s_mode = FACE_CLOCK;
+    if (!prv_notes_up()) s_mode = FACE_CLOCK;
     prv_redraw();
   }
 }
@@ -125,6 +143,14 @@ int face_state_page_ordinal(void) {
 int face_state_enabled_count(void) { return settings_enabled_page_count(); }
 
 static void prv_nudge_deck(void) {
+  // The else-branch below assumes a peek is already up: it advances s_page
+  // without ever assigning s_mode. Reaching it with the notes card up would
+  // leave the card on screen over a mutated page. face_state_on_nudge already
+  // intercepts that case; this guards the direct callers (face_state_next_page).
+  if (prv_notes_up()) {
+    face_state_reset_to_clock();
+    return;
+  }
   if (s_mode == FACE_CLOCK) {
     // Resume after the last page shown, wrapping past the end to the first
     // enabled page so a nudge from the clock is never dead while pages exist.
@@ -174,6 +200,14 @@ static void prv_nudge_single_peek(void) {
 
 void face_state_on_nudge(void) {
   anim_kick();  // every nudge re-wakes the decorative animation
+  // Dismiss the notes card BEFORE the gesture-mode switch. gesture.c delivers
+  // every accepted tap here regardless of GestureMode — it is this switch that
+  // drops them for AUTO_ROTATE/OFF — so intercepting above it is what makes the
+  // card dismissable in all four modes rather than only two.
+  if (prv_notes_up()) {
+    face_state_reset_to_clock();
+    return;
+  }
   switch (settings_get_gesture_mode()) {
     case GESTURE_NUDGE_DECK:  prv_nudge_deck(); break;
     case GESTURE_SINGLE_PEEK: prv_nudge_single_peek(); break;
@@ -215,6 +249,15 @@ void face_state_reset_to_clock(void) {
   prv_redraw();
 }
 
+// Reuses the peek idle timer rather than adding a third AppTimer: it is already
+// one-shot, self-nulling, cancelled in face_state_deinit, and prv_idle_fired
+// unconditionally returns to FACE_CLOCK — exactly the timeout net the card needs.
+void face_state_show_update_notes(uint32_t timeout_ms) {
+  s_mode = FACE_UPDATE_NOTES;
+  prv_arm_idle(timeout_ms);
+  prv_redraw();
+}
+
 // --- Direct navigation (future touch gestures) ---
 
 void face_state_next_page(void) {
@@ -226,6 +269,7 @@ void face_state_next_page(void) {
 void face_state_prev_page(void) {
   if (settings_get_gesture_mode() == GESTURE_AUTO_ROTATE) return;
   anim_kick();
+  if (prv_notes_up()) { face_state_reset_to_clock(); return; }
   if (s_mode != FACE_PEEK) return;
   int prev = prv_prev_enabled((int)s_page);
   if (prev < 0) {
@@ -242,6 +286,7 @@ void face_state_prev_page(void) {
 void face_state_open_overlay(void) {
   if (settings_get_gesture_mode() == GESTURE_AUTO_ROTATE) return;
   anim_kick();
+  if (prv_notes_up()) { face_state_reset_to_clock(); return; }
   s_mode = FACE_OVERLAY;
   prv_arm_idle(PEEK_IDLE_MS);
   prv_redraw();

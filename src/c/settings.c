@@ -32,6 +32,13 @@
 // badge migration. comm.c owns it; we never write or delete it.
 #define KEY_COMM_CACHE_PROBE  30
 
+// Has this watch ever run the face before? Latched at the TOP of settings_init,
+// because prv_migrate_badges below writes keys 29/31/32/33 unconditionally on
+// its first run — after that point every install looks like an upgrade, so any
+// later probe would answer "yes" even on a brand-new watch. Pebble wipes persist
+// on uninstall, so "no keys at all" really does mean a fresh install.
+static bool s_fresh_install = false;
+
 static GestureMode s_gesture_mode = GESTURE_NUDGE_DECK;
 static bool s_page_enabled[PAGE_COUNT] = { true, true, true, true };
 static bool s_rain_auto_show = true;
@@ -111,6 +118,15 @@ static void prv_migrate_badges(void) {
 }
 
 void settings_init(void) {
+  // MUST be first: nothing below may have written a key yet (see s_fresh_install).
+  // The cache key is the strongest signal — every watch that has ever received
+  // weather has it, whatever the user did with the settings. The others cover a
+  // watch that ran the face but never got a payload.
+  s_fresh_install = !(persist_exists(KEY_COMM_CACHE_PROBE) ||
+                      persist_exists(KEY_GESTURE_MODE) ||
+                      persist_exists(KEY_BADGE1) ||
+                      persist_exists(KEY_RAIN_CHANCE_BADGE));
+
   if (persist_exists(KEY_GESTURE_MODE)) {
     s_gesture_mode = (GestureMode)persist_read_int(KEY_GESTURE_MODE);
     if (s_gesture_mode > GESTURE_OFF) s_gesture_mode = GESTURE_NUDGE_DECK;
@@ -165,6 +181,8 @@ void settings_init(void) {
   // Mode was really for. Drop the key so it can't linger in the range.
   if (persist_exists(KEY_BIG_MODE_RETIRED)) persist_delete(KEY_BIG_MODE_RETIRED);
 }
+
+bool settings_is_fresh_install(void) { return s_fresh_install; }
 
 bool settings_get_animations_enabled(void) { return s_animations; }
 void settings_set_animations_enabled(bool on) {

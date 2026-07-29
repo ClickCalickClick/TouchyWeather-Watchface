@@ -8,9 +8,15 @@
 
 static CommUpdateCb s_update_cb = NULL;
 
-// Face persist namespace (see settings.c for the full key map). Bump this
-// key whenever WeatherData's layout changes so an old blob can't misalign —
-// the app's 100→108 discipline.
+// Face persist namespace (see settings.c for the full key map).
+//
+// This key is FIXED at 30 — do NOT inherit the app's "bump on every WeatherData
+// layout change" habit. 31 is already KEY_BADGE2 and 32..35 are settings, so a
+// bump would silently alias a user's badge setting to a weather blob. It is also
+// unnecessary here: comm_load_cache rejects any blob whose persisted size does
+// not match sizeof(WeatherData), which is a stricter guard than a key bump ever
+// was. If a future change genuinely needs a new cache key, take one from the
+// out-of-band 400..409 block (see update_notes.c), never the next number up.
 #define PERSIST_KEY_CACHE 30
 
 // Refetch when data is older than this (checked on the minute tick — the
