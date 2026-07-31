@@ -176,6 +176,16 @@ persisted value has to be persisted too. `prv_apply_ambient` additionally
 refuses to record DARK as a day theme, which is belt-and-braces for the same
 failure and covers upgrading mid-night when 401 is still absent.
 
+The flag alone is not enough to decide whether to force dark, though, because
+it is not the theme's only writer: a Clay save sends the WHOLE dict, so
+`comm.c` runs `theme_set(user_theme)` on every save and a save at night turned
+the face light. The latch was already spent and the restore branch needs
+`!want_night`, so neither fired and night mode stayed cancelled until sunrise.
+`prv_apply_ambient` therefore also re-asserts when `theme_get() != THEME_DARK`,
+which makes it idempotent — it self-corrects from any state instead of assuming
+the latch was the last writer. The flag's job is narrower than it looks: it only
+records that a restore is owed at sunrise.
+
 Key 30 sits inside the settings range — never reuse it, and never *bump* it.
 An older comment told you to bump it on every WeatherData layout change, the
 app's habit; that is now actively dangerous, because 31 is badge 2 and 32–35

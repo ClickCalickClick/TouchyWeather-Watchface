@@ -169,8 +169,9 @@ static void prv_banner_reconcile(void) {
 }
 
 // Night mode: force the dark theme between sunset and sunrise, restoring
-// the user's day theme after. s_night_theme_applied tracks whether the current
-// dark theme is ours (so we never clobber a deliberate choice).
+// the user's day theme after. s_night_theme_applied means "we owe a restore at
+// sunrise" — it is what tells a dark face we forced apart from one the user
+// chose, so we never clobber a deliberate choice.
 //
 // This MUST be persisted, not RAM-only. theme_set writes the theme to persist,
 // but a watchface is reloaded constantly — open any app and come back and this
@@ -200,14 +201,24 @@ static void prv_night_flag_set(bool applied) {
 static void prv_apply_ambient(void) {
   clock_zone_recompute_night();
   bool want_night_theme = settings_get_night_mode() && clock_zone_is_night();
-  if (want_night_theme && !s_night_theme_applied) {
-    // Never record DARK as the day theme. Night mode's override is the only way
-    // the theme can already be DARK here with the flag clear, so recording it
-    // would bake the override in as a preference — the exact corruption above.
-    // A user who genuinely prefers dark is unaffected: comm.c writes the day
-    // theme on every Clay theme change, so their real choice is already stored.
-    // This also covers upgrading mid-night, where key 401 is absent and the
-    // flag reads false against an override we set before this build existed.
+  // Re-assert whenever the theme on screen isn't the one night mode wants, not
+  // just on the flag's rising edge. A Clay save at night sends the whole dict,
+  // so comm.c runs theme_set(user_theme) and the face goes light; with a
+  // flag-only test the latch branch is already spent (applied == true) and the
+  // restore branch needs !want_night, so neither fires and night mode stayed
+  // cancelled until sunrise. Testing the theme itself makes this idempotent —
+  // it self-corrects from any state rather than trusting the latch to have
+  // been the last writer.
+  if (want_night_theme && (!s_night_theme_applied || theme_get() != THEME_DARK)) {
+    // Never record DARK as the day theme. Reaching here with the theme already
+    // DARK means the flag was clear, and night mode's override is the only way
+    // that happens — recording it would bake the override in as a preference,
+    // the exact corruption above. A user who genuinely prefers dark is
+    // unaffected: comm.c writes the day theme on every Clay theme change, so
+    // their real choice is already stored. This also covers upgrading mid-night,
+    // where key 401 is absent and the flag reads false against an override we
+    // set before this build existed. On the re-assert path the theme is by
+    // definition not DARK, so the user's fresh Clay pick is recorded normally.
     ThemeMode current = theme_get();
     if (current != THEME_DARK) settings_set_day_theme((int)current);
     theme_set(THEME_DARK);
