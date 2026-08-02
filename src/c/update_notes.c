@@ -26,10 +26,11 @@
 // face and read them off a screenshot. Set to 0 for real builds.
 #define UPDATE_NOTES_DIAG 0
 
-// How long the card holds before the idle timer returns to the clock. Longer
-// than a peek (7s) because this is prose the user has never seen; short enough
-// that a face is never held hostage by it.
-#define NOTES_IDLE_MS 20000
+// How long the card holds before the idle timer returns to the clock. A touch
+// longer than a peek (7s) because this is prose the user has never seen; short
+// enough that a face is never held hostage by it. Was 20s when a misclassified
+// flick could strand the card (gesture.c now accepts any axis while it is up).
+#define NOTES_IDLE_MS 10000
 
 // "New on the horizon" wraps to two lines against chalk's ~137px chord even at
 // the smaller header font, and two lines of headline is most of the body budget
@@ -45,11 +46,24 @@
 #endif
 
 // Shown instead of the changelog on a genuinely new watch — a first-run user has
-// no "what's new". Static intro copy rather than release notes, which is why it
-// lives here and not in CHANGELOG.md.
+// no "what's new", so this describes the release itself. Static intro copy
+// rather than release notes, which is why it lives here and not in CHANGELOG.md.
+// Same budget discipline as the changelog bullets: the card cannot scroll, so
+// keep each line short (~30 chars — longer wraps to two lines on chalk) and the
+// list at 3, or the small classes collapse the tail into "+N more".
+#define WELCOME_HEADLINE "Welcome"
+#if defined(UI_SCREEN_SMALL_ROUND) || defined(UI_SCREEN_SMALL_RECT)
+// Two bullets that stay single-line on chalk's chord: the 3-bullet copy below
+// collapsed to one bullet + "+2 more" there, which is a poor first hello.
 #define WELCOME_NOTES \
-  "Nudge your wrist to page through the forecast.\n" \
-  "Pick what the face shows from your phone."
+  "Weather at a glance.\n" \
+  "Nudge for forecasts."
+#else
+#define WELCOME_NOTES \
+  "Time and weather, one glance.\n" \
+  "Nudge your wrist for forecasts.\n" \
+  "Make it yours in the Pebble app."
+#endif
 
 #define MARKER_W       5   // triangle marker width
 #define MARKER_INDENT 12   // text indent past the marker
@@ -162,14 +176,17 @@ static int prv_draw_header(GContext *ctx, GRect avail, bool measure_only) {
   }
   y += SUN_SIZE + 4;
 
+  // The welcome card introduces the face; "new on the horizon" would promise
+  // an update history a first boot doesn't have. Short on every chord.
+  const char *head = s_welcome ? WELCOME_HEADLINE : HEADLINE;
   GFont hf = ui_font_header();
   int head_w = face_layout_band_w(avail, y, 24);
   GSize hs = graphics_text_layout_get_content_size(
-      HEADLINE, hf, GRect(0, 0, head_w, 64), GTextOverflowModeWordWrap,
+      head, hf, GRect(0, 0, head_w, 64), GTextOverflowModeWordWrap,
       GTextAlignmentCenter);
   if (!measure_only) {
     graphics_context_set_text_color(ctx, theme_fg());
-    graphics_draw_text(ctx, HEADLINE, hf,
+    graphics_draw_text(ctx, head, hf,
                        GRect(cx - head_w / 2, y, head_w, hs.h + 4),
                        GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
   }
