@@ -46,7 +46,9 @@ Single full-screen Layer; `main.c`'s update proc dispatches on
 - `face_state.c` — CLOCK / PEEK(page) / OVERLAY state machine; nudge deck with
   resume (a nudge from the clock continues after the last-shown page via
   `s_deck_pos`, wrapping — it doesn't restart at page 1 after the idle return),
-  7s idle return, 10s auto-rotate timer, rain auto-peek (edge-triggered). Note
+  7s idle return, 10s auto-rotate timer, rain auto-peek (edge-triggered;
+  enters on the data-arrival redraw, exits on the minute tick after a ≥30s
+  hold — no timer of its own, and any nudge cancels the tick-return). Note
   the peek-page toggles only apply to Nudge Deck / Auto-rotate modes; Single
   peek opens the ONE view `settings_get_single_peek_view()` names (the dense
   `pages/overlay.c` by default, or any single peek page) and Off ignores them —
@@ -115,7 +117,13 @@ Single full-screen Layer; `main.c`'s update proc dispatches on
   app's cards; `overlay.c` is the single-peek grid
 - `comm.c` — trimmed app pipeline: inbox parse, persist cache (key 30),
   refresh sentinel, minute-tick staleness refetch (no wakeups needed —
-  a face's PKJS runs while the face is active)
+  a face's PKJS runs while the face is active). PKJS re-pushes the stored
+  Clay settings on EVERY launch (and retries failed saves): a config save is
+  one AppMessage with no queue, so a drop used to desync phone and watch
+  forever — which presents as "the toggle doesn't work". Consequence: config
+  arrives on every launch, not only on saves, so everything downstream of a
+  config write must stay idempotent (night mode re-asserts, apply_mode
+  reconciles, slot dedup is draw-time).
 - `settings.c` — face settings. Big Mode is GONE (v1.3): the flow layout
   already grows the type as slots are switched off, which is what it was for.
   Retired persist keys are deleted at init (24 battery glyph, 26 Big Mode).
@@ -128,8 +136,10 @@ Single full-screen Layer; `main.c`'s update proc dispatches on
   watchapp's `update_notes.c`. Same look (sun, headline, dotted `····v1.3.0····`
   divider, accent-marked bullets), different machinery: the app pushes a Window,
   scrolls it and dismisses on BACK, none of which a watchface has. Here it is a
-  `FACE_UPDATE_NOTES` mode drawn into the root layer, dismissed by a nudge, with
-  the peek idle timer as the net. Nothing scrolls, so the body runs a fallback
+  `FACE_UPDATE_NOTES` mode drawn into the root layer, dismissed by a nudge on
+  ANY axis (gesture.c bypasses the nudge-input filter while the card is up — a
+  flick the hardware misreads as Z must still work), with the peek idle timer
+  as the net. Nothing scrolls, so the body runs a fallback
   ladder — normal font, then the small font, then drop the tail into "+N more"
   — and clamps every row through `face_layout_band_w`. Copy comes from
   `CHANGELOG.md` via the build (see below); the fresh-install welcome is a
@@ -196,16 +206,20 @@ non-setting keys there, not at the top of the packed low range.
 
 ## Battery rules (enforce when adding timers)
 
-At rest with no rain alert: exactly one wakeup per minute (tick). Every
-AppTimer must be conditional and self-cancelling: anim 10Hz only inside the
-8s post-`anim_kick()` window; banner flip 4s only while `rain_alert_min >= 0`;
-idle-return only in PEEK/OVERLAY/UPDATE_NOTES; rotate 10s only in AUTO_ROTATE
-mode.
+At rest — even during a rain alert — exactly one wakeup per minute (tick).
+Every AppTimer must be conditional and self-cancelling: anim 10Hz only inside
+the 8s post-`anim_kick()` window; idle-return only in PEEK/OVERLAY/
+UPDATE_NOTES; rotate 10s only in AUTO_ROTATE mode. Rain-alert chrome owns NO
+timer: the RAIN/UPDATED pill alternation flips on the minute tick (it was a 4s
+AppTimer originally — ~900 wakeups/hour for the length of an alert), and the
+rain auto-peek enters on the data-arrival redraw and exits via
+`face_state_on_minute_tick` (≥30s hold), so an alert adds zero wakeups.
 
-The update-notes card adds NO timer — it reuses the idle-return one, which is
-why its sun is static. In AUTO_ROTATE only, the rotate and idle timers overlap
-for ≤20s once per release; `prv_rotate_fired` skips its beat while the card is
-up rather than tearing the cadence down, so the deck resumes on dismissal.
+The update-notes card adds NO timer — it reuses the idle-return one (10s),
+which is why its sun is static. In AUTO_ROTATE only, the rotate and idle timers
+overlap for ≤10s once per release; `prv_rotate_fired` skips its beat while the
+card is up rather than tearing the cadence down, so the deck resumes on
+dismissal.
 
 ## Adding a FaceMode
 
