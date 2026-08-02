@@ -16,14 +16,15 @@
 static Window *s_window;
 static Layer *s_root_layer;
 
-// Banner alternation. The app drove the rain/updated flip off the anim
-// frame, which is fine there (constant interaction keeps anim alive) but
-// on an idle face anim freezes after ~8s and could freeze the banner on
-// UPDATED, hiding an active rain alert. So the face owns the flip with a
-// dedicated 4s timer that only exists while a rain alert is active.
-#define BANNER_FLIP_MS 4000
-static AppTimer *s_banner_timer = NULL;
+// Banner alternation. The app drove the rain/updated flip off the anim frame;
+// this face's first cut used a dedicated 4s AppTimer instead, which meant a
+// rain alert woke the watch ~900 times an hour for the whole alert. The flip
+// now rides the minute tick (see prv_tick_handler): one alternation per
+// minute, zero wakeups beyond the at-rest cadence. Each alert leads with the
+// RAIN pill (prv_banner_reconcile resets the phase on the alert's rising
+// edge), so the warning is on screen the moment the alert lands.
 static bool s_banner_alt = false;  // false = RAIN pill, true = UPDATED pill
+static bool s_rain_was_active = false;
 
 // Single redraw funnel: every driver (minute tick, anim ticker, data
 // arrival, state changes) goes through here — one canvas, one dirty bit.
@@ -143,29 +144,17 @@ static void prv_root_update_proc(Layer *layer, GContext *ctx) {
   }
 }
 
-static void prv_banner_tick(void *ctx) {
-  (void)ctx;
-  s_banner_timer = NULL;
-  s_banner_alt = !s_banner_alt;
-  clock_zone_toggle_status_alt();  // the resting face's own status row
-  prv_mark_dirty();
-  if (weather_data_get()->rain_alert_min >= 0) {
-    s_banner_timer = app_timer_register(BANNER_FLIP_MS, prv_banner_tick, NULL);
-  }
-}
-
-// Start/stop the flip timer to match the current rain-alert state.
+// Reset the alternation phase on a rain alert's rising edge so the alert
+// always leads with the RAIN pill. No timer: the flip itself is tick-driven.
 static void prv_banner_reconcile(void) {
-  bool want = weather_data_get()->rain_alert_min >= 0;
-  if (want && !s_banner_timer) {
-    s_banner_alt = false;  // lead with the rain pill
+  bool active = weather_data_get()->rain_alert_min >= 0;
+  if (active && !s_rain_was_active) {
+    s_banner_alt = false;
     clock_zone_reset_status_alt();
-    s_banner_timer = app_timer_register(BANNER_FLIP_MS, prv_banner_tick, NULL);
-  } else if (!want && s_banner_timer) {
-    app_timer_cancel(s_banner_timer);
-    s_banner_timer = NULL;
+  } else if (!active) {
     s_banner_alt = false;
   }
+  s_rain_was_active = active;
 }
 
 // Night mode: force the dark theme between sunset and sunrise, restoring
@@ -233,6 +222,14 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   clock_zone_update_time();
   prv_apply_ambient();
   comm_check_staleness();  // refetch if data is >30 min old
+  // Rain-alert chores ride this redraw instead of owning timers: the
+  // RAIN/UPDATED pill alternates once per minute, and a rain auto-peek that
+  // has had its dwell returns to the clock.
+  if (weather_data_get()->rain_alert_min >= 0) {
+    s_banner_alt = !s_banner_alt;
+    clock_zone_toggle_status_alt();  // the resting face's own status row
+  }
+  face_state_on_minute_tick();
   prv_mark_dirty();
 }
 
@@ -329,10 +326,6 @@ static void prv_init(void) {
 static void prv_deinit(void) {
   tick_timer_service_unsubscribe();
   battery_state_service_unsubscribe();
-  if (s_banner_timer) {
-    app_timer_cancel(s_banner_timer);
-    s_banner_timer = NULL;
-  }
   comm_deinit();
   anim_deinit();
   gesture_deinit();

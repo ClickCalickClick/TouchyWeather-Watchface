@@ -36,6 +36,12 @@ int face_state_enabled_count(void);
 // the card actually becomes visible. update_notes.c decides whether to call it.
 void face_state_show_update_notes(uint32_t timeout_ms);
 
+// Minute tick (main.c calls this from its tick handler, which redraws
+// regardless). Returns a live rain auto-peek to the clock once it has been up
+// ≥30s — the peek's whole lifecycle rides redraws the face was already making,
+// so a rain alert adds no wakeups. No-op in every other state.
+void face_state_on_minute_tick(void);
+
 // A nudge = accel tap / wrist flick (later: touch tap). Behavior dispatches
 // on settings_get_gesture_mode(). While the update-notes card is up, ANY nudge
 // dismisses it instead — in every gesture mode, including the ones that
