@@ -116,11 +116,20 @@ static void prv_tap_handler(AccelAxisType axis, int32_t direction) {
   // The discrimination is imperfect on real hardware, so EITHER accepts any
   // axis as the reliability fallback. Every deck state times out safely to
   // the clock, so an occasional false positive is cheap.
-  bool is_z = (axis == ACCEL_AXIS_Z);
-  switch (settings_get_tap_input_mode()) {
-    case TAP_INPUT_WRIST: if (is_z) return; break;   // want flick, got tap
-    case TAP_INPUT_TAP:   if (!is_z) return; break;  // want tap, got flick
-    case TAP_INPUT_EITHER: break;
+  // The update-notes card skips the axis filter entirely. The wrist/tap
+  // discrimination is imperfect enough that a real flick often lands on Z —
+  // under the default WRIST mode that event was dropped right here, and the
+  // first thing a new user ever saw was a "FLICK TO DISMISS" card that would
+  // not flick away. Same principle as face_state_on_nudge intercepting ahead
+  // of the gesture-mode switch: the card must dismiss on ANY accepted motion,
+  // and a false positive merely dismisses a card already on a 20s timeout.
+  if (face_state_mode() != FACE_UPDATE_NOTES) {
+    bool is_z = (axis == ACCEL_AXIS_Z);
+    switch (settings_get_tap_input_mode()) {
+      case TAP_INPUT_WRIST: if (is_z) return; break;   // want flick, got tap
+      case TAP_INPUT_TAP:   if (!is_z) return; break;  // want tap, got flick
+      case TAP_INPUT_EITHER: break;
+    }
   }
   face_state_on_nudge();
 }
