@@ -416,9 +416,44 @@ function locateAndFetch() {
   );
 }
 
+// Re-push the saved Clay settings on every PKJS launch. A config save is ONE
+// AppMessage with no queue behind it: if it lands while the watch inbox is
+// busy (a weather push mid-arrival, the face mid-restart, a BT hiccup) it is
+// dropped silently, and the two sides then disagree forever — the config page
+// shows the new value (Clay stored it phone-side before sending), the watch
+// keeps the old one, and nothing ever reconciles. A watchface restarts every
+// time the user visits an app and comes back, so re-sending the stored dict
+// on 'ready' heals any divergence within one face launch. The watch side is
+// idempotent by design: night mode re-asserts its override after any theme
+// write, face_state_apply_mode reconciles gesture mode on every payload, and
+// slot de-duplication happens at draw time.
+function pushStoredSettings(done) {
+  var stored = null;
+  try { stored = localStorage.getItem('clay-settings'); } catch (err) {}
+  if (!stored) { done(); return; }
+  var msg;
+  try {
+    // getSettings accepts the stored flat dict as a response and returns the
+    // numeric-keyed AppMessage dict (same path a real save takes).
+    msg = clay.getSettings(stored);
+  } catch (err) {
+    console.log('stored clay-settings unreadable, skipping re-push: ' + err);
+    done(); return;
+  }
+  Pebble.sendAppMessage(msg, function() { done(); }, function() {
+    console.log('settings re-push failed, retrying once');
+    setTimeout(function() {
+      Pebble.sendAppMessage(msg, function() { done(); }, function() { done(); });
+    }, 2000);
+  });
+}
+
 Pebble.addEventListener('ready', function() {
   console.log('TouchyWeather Face PKJS ready');
-  maybeInitialFetch();
+  // Settings first, weather second — back-to-back sends race on the watch
+  // (the second arrives while comm.c is still parsing the first and is
+  // dropped), so the fetch waits for the config send to resolve.
+  pushStoredSettings(function() { maybeInitialFetch(); });
 });
 
 Pebble.addEventListener('appmessage', function(e) {
@@ -480,6 +515,23 @@ Pebble.addEventListener('webviewclosed', function(e) {
       console.log('config saved, no weather-relevant change, skipping fetch');
     }
   }
+  // Retry a failed save send. Without this a save that catches the watch at
+  // a busy moment is lost silently and the user's toggle "doesn't work" (the
+  // ready-time re-push above would still heal it, but only on the next face
+  // launch — retrying here makes the save itself land almost always).
   var msg = clay.getSettings(e.response);
-  Pebble.sendAppMessage(msg, afterSave, afterSave);
+  var attempts = 0;
+  function trySend() {
+    attempts++;
+    Pebble.sendAppMessage(msg, afterSave, function() {
+      if (attempts < 3) {
+        console.log('config send failed (attempt ' + attempts + '), retrying');
+        setTimeout(trySend, 1500);
+      } else {
+        console.log('config send failed after ' + attempts + ' attempts');
+        afterSave();
+      }
+    });
+  }
+  trySend();
 });
