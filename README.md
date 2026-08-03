@@ -89,6 +89,22 @@ override, and the ambient extras — **rain auto-peek** (flashes the hourly page
 when rain is due within the hour), **night mode** (dark theme plus moon phase
 after sunset), and **Quick View reflow**.
 
+## After an update
+
+The first launch on a new version shows a **"New on the horizon"** card — sun,
+headline, a dotted `····v1.3.1····` divider and the release's bullets — then
+never again for that version. The copy is not written twice: `wscript` parses
+the top `## x.y.z` block of `CHANGELOG.md` into `version_gen.h` at build time,
+so the changelog *is* the card. A genuinely new watch gets a **Welcome** card
+instead, since a first run has no "what's new".
+
+Nothing scrolls on a watch face, so the card measures itself and steps down a
+fallback ladder — normal font, then small, then fold the tail into "+N more" —
+and clamps every row to its own chord on the round classes. Dismiss it with a
+nudge on **any** axis (whatever your nudge-input setting, since a flick the
+hardware misreads as a tap still has to work), or let it time out after 10 s.
+It adds no timer of its own and draws a deliberately static sun.
+
 ## Interactions & the touch story
 
 Watch faces on current Pebble firmware **cannot receive touch_service
@@ -120,10 +136,16 @@ In a `watchface: true` build:
 
 ## Battery
 
-At rest with no rain alert the face wakes **once per minute**, on the tick.
-Every other timer is conditional and self-cancelling: the 10 Hz animation only
-inside its 8 s window, the banner flip only during a rain alert, the idle
-return only while a peek is open, auto-rotate only in that mode.
+At rest the face wakes **exactly once per minute**, on the tick — *including
+during an active rain alert*. Rain chrome owns no timer of its own: the
+`RAIN` ⇄ `UPDATED` pill alternates on the tick, and the rain auto-peek enters
+on the data-arrival redraw and returns to the clock on a later tick. (Both used
+to run dedicated AppTimers; the 4 s banner flip alone cost ~900 wakeups an hour
+for the length of an alert.)
+
+Every remaining timer is conditional and self-cancelling: the 10 Hz animation
+only inside its 8 s window, the idle return only while a peek or the update
+card is open, auto-rotate only in that mode.
 
 ## Build / run
 

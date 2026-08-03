@@ -34,3 +34,7 @@ src/c/version_gen.h
 screenshots/**/*.png
 !screenshots/readme/*.png
 screenshots/platform-review/
+
+# Python bytecode from tools/
+__pycache__/
+*.pyc
