@@ -215,7 +215,67 @@ function reverseGeocode(lat, lon, done) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// STORE-CAPTURE MODE — must be false in any shipped build.
+//
+// Replaces the live Open-Meteo fetch with one fixed payload so the store
+// screenshots show the same forecast on every platform. Nothing in src/c is
+// involved: this only changes which numbers the watch is handed, so what gets
+// photographed is still the real rendering. With the live fetch running, its
+// reply lands at an unpredictable moment and overwrites the capture data
+// mid-run (it showed up as a foreign sunset on the Sun+Moon page).
+var CAPTURE_MODE = false;
+
+function capturePayload() {
+  var now = new Date();
+  var msg = {
+    Temp: 72, FeelsLike: 75, High: 84, Low: 61, Condition: 1,
+    Wind: 12, WindDir: 'NW', Humidity: 58, DewPoint: 55,
+    UV: 7, UVMax: 9, AQI: 42,
+    Sunrise: '6:14 AM', Sunset: '7:45 PM',
+    LocationName: 'San Francisco',
+    RainAlertMinutes: -1,
+    LastUpdated: Math.floor(Date.now() / 1000)
+  };
+  var temps = [74, 78, 81, 83, 80, 76];
+  var conds = [1, 1, 2, 3, 3, 2];
+  var pops = [10, 15, 35, 60, 55, 25];
+  for (var h = 1; h <= 6; h++) {
+    var hr = (now.getHours() + h) % 24;
+    var ampm = hr >= 12 ? 'PM' : 'AM';
+    var h12 = hr % 12; if (h12 === 0) { h12 = 12; }
+    msg['Hour' + h + 'Label'] = h12 + ' ' + ampm;
+    msg['Hour' + h + 'Temp'] = temps[h - 1];
+    msg['Hour' + h + 'Cond'] = conds[h - 1];
+    msg['Hour' + h + 'Pop'] = pops[h - 1];
+  }
+  var names = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  var highs = [84, 79, 73, 81, 86];
+  var lows = [61, 59, 57, 60, 63];
+  var dconds = [1, 3, 3, 0, 0];
+  for (var dI = 0; dI < 5; dI++) {
+    msg['Day' + dI + 'Label'] = names[(now.getDay() + dI) % 7];
+    msg['Day' + dI + 'High'] = highs[dI];
+    msg['Day' + dI + 'Low'] = lows[dI];
+    msg['Day' + dI + 'Cond'] = dconds[dI];
+  }
+  msg.MoonPhase = 3;
+  msg.MoonIllum = 72;
+  msg.MoonName1 = 'WAXING';
+  msg.MoonName2 = 'GIBBOUS';
+  return msg;
+}
+
 function fetchWeather(lat, lon) {
+  if (CAPTURE_MODE) {
+    Pebble.sendAppMessage(capturePayload(),
+      function() { console.log('capture payload sent'); fetchDone(); },
+      function(e) {
+        console.log('capture send fail: ' + JSON.stringify(e));
+        fetchDone();
+      });
+    return;
+  }
   var units = getUnits();
   var tempUnit = units === 'metric' ? 'celsius' : 'fahrenheit';
   var windUnit = units === 'metric' ? 'kmh' : 'mph';
@@ -396,6 +456,11 @@ function locateAndFetch() {
     return;
   }
   fetchStartedAt = Date.now();
+  if (CAPTURE_MODE) {
+    // Skip geolocation too — the emulator's fix is slow and irrelevant here.
+    fetchWeather(0, 0);
+    return;
+  }
   var override = localStorage.getItem('locationOverride');
   if (override) {
     var parts = override.split(',');
