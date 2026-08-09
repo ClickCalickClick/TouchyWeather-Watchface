@@ -33,6 +33,8 @@
     "messageKeys": [
       "Theme",
       "Units",
+      "WindUnits",
+      "WindSpeedUnit",
       "TimeFormat",
       "ClockIs24h",
       "LocationOverride",

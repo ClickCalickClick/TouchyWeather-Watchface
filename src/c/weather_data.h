@@ -16,6 +16,20 @@ typedef enum {
   UNITS_METRIC = 1,
 } Units;
 
+// Wind speed unit, INDEPENDENT of `units` above. m/s is the everyday wind unit
+// across Scandinavia while °C was never in question there, so folding this into
+// `units` would have been the wrong axis. The phone resolves the user's choice
+// (including "auto") and sends the RESOLVED value, because the Open-Meteo
+// request has to name a concrete unit anyway — so the face never derives the
+// label from `units`, and carries no AUTO case at all.
+//
+// MPH = 0 so the zero value is the pre-existing imperial behaviour.
+typedef enum {
+  WIND_UNITS_MPH = 0,
+  WIND_UNITS_KMH = 1,
+  WIND_UNITS_MS  = 2,
+} WindUnits;
+
 typedef struct {
   int temp;            // current, in selected unit
   int feels_like;
@@ -97,7 +111,26 @@ typedef struct {
   int pm10;
   int o3;
   int no2;
+
+  // WindUnits — the unit `wind_speed` and `hours_wind` above arrive in.
+  //
+  // Deliberately APPENDED, not tucked into existing padding. This face's cache
+  // guard (comm.c) is size-only — it accepts any blob whose length equals
+  // sizeof(WeatherData) and has no layout-version key to fall back on. Hiding
+  // this byte in padding would leave sizeof unmoved, so a pre-update blob would
+  // be accepted verbatim and this field would read whatever that padding held:
+  // a 2 there relabels a 12 km/h reading as "12M/S", a storm. At the tail,
+  // sizeof moves 440 -> 444, the existing guard rejects the old blob, and the
+  // cost is one refresh with no stale reading shown — which is exactly what
+  // that guard's comment already says it is for. 4 bytes, no new code.
+  uint8_t wind_units;
 } WeatherData;
+
+// "MPH" / "KMH" / "M/S" for d->wind_units. ONE definition on purpose: this
+// string was an inline ternary in page_conditions.c, and adding a third case
+// inline is the duplicated-helper shape that has produced repeated defects in
+// the sibling app. Callers must not re-derive it from d->units.
+const char *wind_unit_label(const WeatherData *d);
 
 void weather_data_init_mock(void);
 WeatherData *weather_data_get(void);

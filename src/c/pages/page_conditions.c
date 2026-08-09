@@ -52,9 +52,10 @@ void page_conditions_draw(GContext *ctx, GRect bounds) {
 
   icon_draw_wind(ctx, GPoint(ox + W / 4, y + 8), wind_ic, theme_fg());
   char wind_buf[16];
-  const char *wind_unit = (d->units == UNITS_METRIC) ? "KMH" : "MPH";
+  // Unit follows the dedicated wind-unit setting, NOT `units` — see WindUnits
+  // in weather_data.h.
   snprintf(wind_buf, sizeof(wind_buf), "%d%s %s",
-           d->wind_speed, wind_unit, d->wind_dir);
+           d->wind_speed, wind_unit_label(d), d->wind_dir);
   graphics_context_set_text_color(ctx, theme_fg());
   graphics_draw_text(ctx, wind_buf, face_font_header(),
                      GRect(ox, y + val_y, W / 2, val_h),
