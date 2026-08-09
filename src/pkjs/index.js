@@ -84,6 +84,31 @@ function getUnits() {
   return localStorage.getItem('units') === 'metric' ? 'metric' : 'imperial';
 }
 
+// Wind speed unit, INDEPENDENT of the measurement system. m/s is the everyday
+// wind unit across Scandinavia while °C was never in question, so folding it
+// into `units` would have been the wrong axis. Stored as the raw Clay choice;
+// 'auto' is the default, which is what keeps this from changing anything for
+// existing users.
+function getWindUnitPref() {
+  var w = localStorage.getItem('windUnit');
+  return (w === 'mph' || w === 'kmh' || w === 'ms') ? w : 'auto';
+}
+
+// Resolve 'auto' against the measurement system. Deliberately done phone-side:
+// the Open-Meteo request has to name a concrete unit anyway, so sending the
+// RESOLVED value means the face never consults its units setting to label wind
+// and carries no AUTO case. See WindUnits in weather_data.h.
+function resolveWindUnit(units) {
+  var w = getWindUnitPref();
+  if (w !== 'auto') return w;
+  return units === 'metric' ? 'kmh' : 'mph';
+}
+
+// Our storage strings are exactly Open-Meteo's wind_speed_unit values, so the
+// URL takes them verbatim. The face does not — it gets this enum, which must
+// stay in step with WindUnits in weather_data.h.
+var WIND_UNIT_CODE = { mph: 0, kmh: 1, ms: 2 };
+
 function xhr(url, cb) {
   var req = new XMLHttpRequest();
   req.open('GET', url, true);
@@ -278,7 +303,7 @@ function fetchWeather(lat, lon) {
   }
   var units = getUnits();
   var tempUnit = units === 'metric' ? 'celsius' : 'fahrenheit';
-  var windUnit = units === 'metric' ? 'kmh' : 'mph';
+  var windUnit = resolveWindUnit(units);
 
   // `precipitation` stays in the hourly request: RainAlertMinutes is driven
   // by measurable amount (matching the app), even though per-hour amounts
@@ -336,6 +361,10 @@ function fetchWeather(lat, lon) {
           msg.AQI = Math.round(aqd.current.us_aqi || 0);
         }
         msg.Units = units === 'metric' ? 1 : 0;
+        // Already resolved — never 'auto'. Sent alongside Units so the face's
+        // absent-key fallback (comm.c) and this value can never disagree about
+        // which reading the numbers above are in.
+        msg.WindUnits = WIND_UNIT_CODE[windUnit];
         msg.LastUpdated = Math.floor(Date.now() / 1000);
 
         // Index of the current hour in the hourly arrays, so "+1h" is
@@ -545,6 +574,12 @@ Pebble.addEventListener('showConfiguration', function() {
 function weatherRelevantSnapshot() {
   return [
     localStorage.getItem('units'),
+    // Load-bearing: the wind unit is applied by the API, not by the face, so
+    // changing it without a refetch would relabel the SAME numbers — 12 km/h
+    // would redraw as "12M/S", a gale. It also has to stay listed even though
+    // 'auto' derives from units, because switching auto->ms changes the
+    // request while `units` does not move.
+    localStorage.getItem('windUnit'),
     localStorage.getItem('useDewPoint'),
     localStorage.getItem('timeFormat'),
     localStorage.getItem('locationOverride')
@@ -559,6 +594,15 @@ Pebble.addEventListener('webviewclosed', function(e) {
     // Clay radiogroup values come back as strings ("0"/"1"); coerce first.
     localStorage.setItem('units',
       parseInt(dict.Units.value, 10) === 1 ? 'metric' : 'imperial');
+  }
+  if (dict.WindSpeedUnit !== undefined) {
+    // Clay select values come back as strings. Whitelist rather than store
+    // verbatim: an unrecognised value would fall through getWindUnitPref() to
+    // 'auto' on read anyway, but it would also reach the Open-Meteo URL from
+    // here and fail the whole forecast request.
+    var wsu = String(dict.WindSpeedUnit.value);
+    localStorage.setItem('windUnit',
+      (wsu === 'mph' || wsu === 'kmh' || wsu === 'ms') ? wsu : 'auto');
   }
   if (dict.UseDewPoint !== undefined) {
     localStorage.setItem('useDewPoint', dict.UseDewPoint.value ? '1' : '0');

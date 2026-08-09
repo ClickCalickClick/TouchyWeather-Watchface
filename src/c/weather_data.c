@@ -108,6 +108,19 @@ void weather_data_init_mock(void) {
 
 WeatherData *weather_data_get(void) { return &s_data; }
 
+const char *wind_unit_label(const WeatherData *d) {
+  // "M/S" and not "MS": the slash is what stops it reading as an abbreviation
+  // of something else, and all three labels are 3 chars, so the conditions
+  // row's width budget does not move.
+  //
+  // One packed literal indexed by a shift, rather than a switch or an array of
+  // three pointers — the whole function is a shift and an add.
+  //
+  // Safe to index unguarded ONLY because comm.c clamps wind_units on receipt.
+  static const char k[] = "MPH\0KMH\0M/S";
+  return k + (d->wind_units << 2);
+}
+
 const char *uv_label(int uv) {
   if (uv <= 2) return "LOW";
   if (uv <= 5) return "MODERATE";

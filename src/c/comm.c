@@ -166,6 +166,24 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, MESSAGE_KEY_LocationName))) { prv_copy_str(d->location_name, sizeof(d->location_name), t); }
   if ((t = dict_find(iter, MESSAGE_KEY_RainAlertMinutes))) { d->rain_alert_min = t->value->int32; }
   if ((t = dict_find(iter, MESSAGE_KEY_Units))) { d->units = (Units)t->value->int32; }
+  // Deliberately NOT nested under Units, and with no derive-from-units
+  // fallback. A Clay save arrives through this same handler carrying Units but
+  // NOT WindUnits — WindUnits is not a Clay key; the Clay control is
+  // WindSpeedUnit ("auto"/"mph"/...), which index.js resolves to this integer
+  // itself. A fallback under Units would therefore recompute the wind unit from
+  // the temperature system on every settings save and stamp an explicit m/s
+  // choice back to KMH.
+  //
+  // The invariant instead: wind_units is written only by the payload carrying
+  // the wind numbers it describes. Absent key => keep what we had.
+  //
+  // Clamped here, once, at the choke point, so every consumer can index a
+  // 3-entry table with the raw value and none needs its own bounds check.
+  if ((t = dict_find(iter, MESSAGE_KEY_WindUnits))) {
+    int32_t wu = t->value->int32;
+    d->wind_units = (wu < 0 || wu > WIND_UNITS_MS) ? WIND_UNITS_MPH
+                                                   : (uint8_t)wu;
+  }
   if ((t = dict_find(iter, MESSAGE_KEY_LastUpdated))) {
     // PKJS sends the fetch's unix-second timestamp; anything < 100000 is a
     // sentinel echo, not a real time — use the device clock instead.

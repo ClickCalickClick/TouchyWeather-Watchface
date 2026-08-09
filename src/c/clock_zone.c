@@ -321,7 +321,22 @@ static bool prv_badge_is_notable(ComplicationSlot which) {
     case COMPLICATION_AQI:      return d->aqi >= 101;   // "unhealthy for some"
     case COMPLICATION_HUMIDITY: return d->humidity >= 80;
     case COMPLICATION_DEW:      return d->dew_point >= (metric ? 18 : 65);
-    case COMPLICATION_WIND:     return d->wind_speed >= (metric ? 30 : 20);
+    // Keyed on the WIND unit, not `units` — those axes are independent now
+    // (WindUnits in weather_data.h). 9 m/s is the sibling app's number and
+    // matches its 20 mph at the top of Beaufort 5.
+    //
+    // The mph/kmh entries are the PRE-EXISTING 20/30, kept verbatim. The app
+    // uses 32 for km/h, so the two products disagree by 2 km/h — that
+    // divergence predates this change, and correcting it here would move a
+    // badge threshold for existing metric users under cover of a feature whose
+    // whole premise is "nothing changes unless you pick m/s". Worth fixing;
+    // not worth fixing silently, and not in this commit.
+    //
+    // Safe to index unguarded because comm.c clamps wind_units on receipt.
+    case COMPLICATION_WIND: {
+      static const uint8_t wind_notable_by_unit[3] = { 20, 30, 9 };
+      return d->wind_speed >= wind_notable_by_unit[d->wind_units];
+    }
     case COMPLICATION_FEELS: {
       int delta = d->feels_like - d->temp;
       if (delta < 0) delta = -delta;
