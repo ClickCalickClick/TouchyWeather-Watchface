@@ -76,6 +76,19 @@ typedef enum {
   UPDATED_NEVER = 2,
 } UpdatedDisplay;
 
+// How the resting face splits its type budget between the clock and the
+// weather row. On the large classes both are LECO_42 today — the clock is not
+// small, the temperature is equally large — so "Large clock" works by demoting
+// the weather row at the promoted tier, which makes that tier cheap enough for
+// the flow solver to reach on stacks where it previously could not. It never
+// forces a tier: sizing the clock against anything but the solver's own fit
+// test is what produced the promote-then-demote launch flash (clock_zone.c).
+typedef enum {
+  CLOCK_EMPHASIS_BALANCED = 0,  // default — today's layout, unchanged
+  CLOCK_EMPHASIS_LARGE = 1,     // weather row demoted so the clock can grow
+  CLOCK_EMPHASIS_MAX = CLOCK_EMPHASIS_LARGE,
+} ClockEmphasis;
+
 void settings_init(void);
 
 // True when this launch found NO prior persist key — i.e. a genuinely new watch,
@@ -149,3 +162,6 @@ void settings_set_updated_display(UpdatedDisplay mode);
 
 SinglePeekView settings_get_single_peek_view(void); // default SINGLE_PEEK_OVERLAY
 void settings_set_single_peek_view(SinglePeekView view);
+
+ClockEmphasis settings_get_clock_emphasis(void); // default CLOCK_EMPHASIS_BALANCED
+void settings_set_clock_emphasis(ClockEmphasis mode);

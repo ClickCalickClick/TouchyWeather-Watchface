@@ -147,9 +147,14 @@ module.exports = {
     // drop away (mimics the flow layout's XL clock promotion), scale down to
     // fit tight classes, and centre the whole stack vertically. Widths are
     // chord-clamped on round. Returns boxes in native face coordinates.
-    function layoutRows(rows, face) {
+    function layoutRows(rows, face, emphasis) {
       var base = { TIME: 40, DATE: 18, COMPS: 16, WEATHER: 36,
                    BADGES: 20, UPDATED: 18 };
+      // "Large clock": the watch demotes the whole weather row (icon, temp and
+      // hi/lo) one tier so the promoted clock fits more often. Sketch the same
+      // trade — a shorter WEATHER row and a taller TIME — so the preview doesn't
+      // claim the setting does nothing.
+      if (emphasis === 1) { base.TIME += 12; base.WEATHER -= 8; }
       var pad = face.shape === 'round' ? Math.round(face.h * 0.14) : 10;
       var avail = face.h - 2 * pad;
 
@@ -372,7 +377,7 @@ module.exports = {
       ctx.clip();
 
       var rows = computeRows(state);
-      var boxes = layoutRows(rows, face);
+      var boxes = layoutRows(rows, face, state.emphasis);
 
       var badges = [];
       if (state.badge1) {

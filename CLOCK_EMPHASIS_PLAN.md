@@ -1,5 +1,24 @@
 # Round C: the "Large clock" Clay setting
 
+**Status: DONE, shipped in 1.4.0 (2026-08-13).** Built as designed — the
+solver was never forced, only made cheaper to satisfy. Verified on all six
+platforms; clock ink height grew on every one, so open question 1 below
+("is it a no-op on chalk and basalt?") is answered **no**:
+
+| Platform | Clock ink, Balanced → Large |
+|---|---|
+| gabbro | 55 → 74 px |
+| chalk | 28 → 41 px |
+| emery | 29 → 39 px |
+| basalt | 23 → 37 px |
+| diorite / flint | 25 → 37 px |
+
+Default stays `CLOCK_EMPHASIS_BALANCED`, where `face_weather_tier()` returns
+its argument and the headroom is the original constant — so the default path
+reduces to the previous code exactly.
+
+Original plan, kept for the reasoning:
+
 **Status:** designed, approved, NOT started. 2026-08-07.
 
 From the r/pebble TouchyWeather 2.0 thread, u/wickedest-witch:

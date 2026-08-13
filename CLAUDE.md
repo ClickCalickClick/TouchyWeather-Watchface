@@ -113,6 +113,15 @@ Single full-screen Layer; `main.c`'s update proc dispatches on
   (`FONT_CLOCK_XL_48/52/56/64` in package.json, scoped by `targetPlatforms`);
   `face_fonts_deinit()` unloads it and is called from main.c's `prv_deinit`.
   This is the repo's only custom font — that whole lifetime lives here.
+  `face_weather_tier()` is the "Large clock" setting's whole mechanism: under
+  `CLOCK_EMPHASIS_LARGE` a promoted clock keeps its weather row at the BASE
+  tier, so `m.weather_h` falls and the solver's own fit test starts passing on
+  stacks it previously failed. The setting never forces a tier — the clock is
+  still promoted only where it provably fits, so it cannot clip, and worst case
+  it is a no-op. Two traps: the row's height is set by the ICON (58-60px at
+  promoted, against a 46px temp), so demoting only the fonts changes nothing;
+  and `prv_measure`'s `temp_h`/`hilo_line_h` come from `#define`s rather than
+  fonts, so they must apply `face_weather_tier` by hand.
 - `pages/` — peek pages, each `(GContext *ctx, GRect bounds)` like the
   app's cards; `overlay.c` is the single-peek grid
 - `comm.c` — trimmed app pipeline: inbox parse, persist cache (key 30),
@@ -171,8 +180,8 @@ sets a badge to Battery + only-when-notable. There is deliberately NO
 migration: nothing appears unless they ask for it.
 
 Persist keys: 1 theme (theme.c) · 10–29 settings (24 and 26 retired + deleted
-at init, 29 = badge 1) · 30 weather cache · 31–35 settings continued (badge 2,
-both notable flags, UpdatedDisplay, SinglePeekView) · 200 legacy theme
+at init, 29 = badge 1) · 30 weather cache · 31–36 settings continued (badge 2,
+both notable flags, UpdatedDisplay, SinglePeekView, ClockEmphasis) · 200 legacy theme
 (migrate-then-deleted in theme.c) · **400 last-seen update-notes version**
 (update_notes.c) · **401 night-theme-override applied** (main.c).
 

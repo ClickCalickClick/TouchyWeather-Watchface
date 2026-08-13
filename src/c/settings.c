@@ -27,6 +27,7 @@
 #define KEY_BADGE2_NOTABLE    33
 #define KEY_UPDATED_DISPLAY   34
 #define KEY_SINGLE_PEEK_VIEW  35
+#define KEY_CLOCK_EMPHASIS    36
 
 // The weather cache, read here only as an "is this an upgrade?" probe during
 // badge migration. comm.c owns it; we never write or delete it.
@@ -56,6 +57,7 @@ static bool s_badge1_notable = false;
 static bool s_badge2_notable = false;
 static UpdatedDisplay s_updated_display = UPDATED_ALWAYS;
 static SinglePeekView s_single_peek_view = SINGLE_PEEK_OVERLAY;
+static ClockEmphasis s_clock_emphasis = CLOCK_EMPHASIS_BALANCED;
 
 static bool prv_read_bool(uint32_t key, bool fallback) {
   return persist_exists(key) ? persist_read_bool(key) : fallback;
@@ -173,6 +175,13 @@ void settings_init(void) {
     s_single_peek_view = (SinglePeekView)persist_read_int(KEY_SINGLE_PEEK_VIEW);
     if (s_single_peek_view > SINGLE_PEEK_MAX) {
       s_single_peek_view = SINGLE_PEEK_OVERLAY;
+    }
+  }
+
+  if (persist_exists(KEY_CLOCK_EMPHASIS)) {
+    s_clock_emphasis = (ClockEmphasis)persist_read_int(KEY_CLOCK_EMPHASIS);
+    if (s_clock_emphasis > CLOCK_EMPHASIS_MAX) {
+      s_clock_emphasis = CLOCK_EMPHASIS_BALANCED;
     }
   }
 
@@ -306,4 +315,13 @@ void settings_set_single_peek_view(SinglePeekView view) {
   if (view > SINGLE_PEEK_MAX) view = SINGLE_PEEK_OVERLAY;
   s_single_peek_view = view;
   persist_write_int(KEY_SINGLE_PEEK_VIEW, (int)view);
+}
+
+ClockEmphasis settings_get_clock_emphasis(void) { return s_clock_emphasis; }
+void settings_set_clock_emphasis(ClockEmphasis mode) {
+  // A radiogroup, so a third step can be added later without a migration —
+  // clamp anything unknown back to the default rather than trusting the wire.
+  if (mode > CLOCK_EMPHASIS_MAX) mode = CLOCK_EMPHASIS_BALANCED;
+  s_clock_emphasis = mode;
+  persist_write_int(KEY_CLOCK_EMPHASIS, (int)mode);
 }

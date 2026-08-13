@@ -699,6 +699,12 @@ typedef struct {
 static void prv_measure(FaceMetrics *m, int tier, int W) {
   WeatherData *d = weather_data_get();
 
+  // The clock is sized at `tier`; the weather row at `wtier`, which is the same
+  // thing unless "Large clock" is on, in which case a promoted clock leaves the
+  // weather row at base. The accessors apply this themselves — the two heights
+  // below come from #defines instead of fonts, so they must apply it by hand.
+  const int wtier = face_weather_tier(tier);
+
   m->time_font = face_font_clock_tier(tier);
   // The clock is digits + colon only, so its ink height is constant per font —
   // reserve that (not the layout box, whose top-side leading is dead space) and
@@ -731,8 +737,8 @@ static void prv_measure(FaceMetrics *m, int tier, int W) {
   m->hilo_w = FZ_HILO_ARROW_COL + hilo_text_w;  // arrow+gap lead, then text
   // Widths come from measurement (they must fit real digits); heights come from
   // the ink constants above.
-  m->hilo_line_h = (tier >= FACE_TIER_PROMOTED) ? FZ_HILO_PITCH
-                                                : FZ_HILO_PITCH - 2;
+  m->hilo_line_h = (wtier >= FACE_TIER_PROMOTED) ? FZ_HILO_PITCH
+                                                 : FZ_HILO_PITCH - 2;
 
   m->icon_size = face_icon_size_tier(tier);
   m->cluster_w = m->icon_size + FZ_CLUSTER_GAP + m->temp_sz.w +
@@ -741,8 +747,8 @@ static void prv_measure(FaceMetrics *m, int tier, int W) {
   // The row is as tall as its tallest member: the icon, the temp, or the
   // stacked hi/lo pair (two line heights).
   int hilo_h = 2 * m->hilo_line_h;
-  int temp_h = (tier >= FACE_TIER_PROMOTED) ? FZ_TEMP_INK_H + 6
-                                            : FZ_TEMP_INK_H;
+  int temp_h = (wtier >= FACE_TIER_PROMOTED) ? FZ_TEMP_INK_H + 6
+                                             : FZ_TEMP_INK_H;
   m->weather_h = m->icon_size;
   if (temp_h > m->weather_h) m->weather_h = temp_h;
   if (hilo_h > m->weather_h) m->weather_h = hilo_h;
@@ -780,6 +786,24 @@ static void prv_fill_rows(FlowRow rows[FLOW_ROW_COUNT], const FaceMetrics *m,
 #else  // UI_SCREEN_SMALL_RECT
   #define FZ_PROMOTE_HEADROOM 20
 #endif
+
+// The headroom under CLOCK_EMPHASIS_LARGE. Of the two jobs above, that setting
+// deliberately waives the second — holding the full six-row stack at the base
+// clock IS the design line the user asked us to drop — so only the first,
+// keeping a promoted stack off the bezel, survives. It has to shrink: demoting
+// the weather row buys only 6-8px, less than one row, so at the balanced
+// headroom the setting would have been a no-op on the default stack.
+//
+// Measured 2026-08-07 on the six-row default stack, promoted probe, per class
+// (required_h demoted -> +8 vs avail_h, and cluster_w vs the chord):
+//   emery   199+8=207 <= 228   cluster 182 <= 188   (was 207+24=231, 190 > 188)
+//   gabbro  235+8=243 <= 260   cluster 184 <= 238   (was 243+20=263)
+//   chalk   148+8=156 <= 180   cluster 114 <= 168   (was 154+28=182)
+//   s-rect  143+8=151 <= 168   cluster 123 <= 136   (was 151+20=171, 170 > 136)
+// So every class clears by 17-25px, and the width test — which was the binding
+// constraint on emery and small-rect, not the height — clears too. Retune here
+// if FZ_CLOCK_INK_XL or face_icon_size_tier move.
+#define FZ_PROMOTE_HEADROOM_EMPH 8
 
 void clock_zone_draw_full(GContext *ctx, GRect bounds) {
   WeatherData *d = weather_data_get();
@@ -825,7 +849,11 @@ void clock_zone_draw_full(GContext *ctx, GRect bounds) {
   prv_measure(&m, FACE_TIER_PROMOTED, W);
   prv_fill_rows(rows, &m, has_comps, prv_badges_would_show_fresh(),
                 prv_status_row_settled());
-  if (face_layout_required_h(rows) + FZ_PROMOTE_HEADROOM <= avail_h &&
+  const int headroom =
+      (settings_get_clock_emphasis() == CLOCK_EMPHASIS_LARGE)
+          ? FZ_PROMOTE_HEADROOM_EMPH
+          : FZ_PROMOTE_HEADROOM;
+  if (face_layout_required_h(rows) + headroom <= avail_h &&
       m.cluster_w <= face_layout_band_w(bounds, bounds.origin.y +
                                         bounds.size.h / 2, m.weather_h)) {
     tier = FACE_TIER_PROMOTED;

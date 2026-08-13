@@ -25,7 +25,8 @@ module.exports = function(minified) {
     'BadgeComp2',     // Badge 2 → BADGES row
     'Badge1Notable',  // Badge 1 conditional style
     'Badge2Notable',  // Badge 2 conditional style
-    'UpdatedDisplay'  // UPDATED row: Always / stale-only / Off
+    'UpdatedDisplay', // UPDATED row: Always / stale-only / Off
+    'ClockEmphasis'   // Balanced / Large clock → TIME vs WEATHER row heights
   ];
 
   clayConfig.on(clayConfig.EVENTS.AFTER_BUILD, function() {
@@ -47,7 +48,8 @@ module.exports = function(minified) {
         badge2: toInt(get('BadgeComp2')),
         notable1: !!get('Badge1Notable'),
         notable2: !!get('Badge2Notable'),
-        updated: toInt(get('UpdatedDisplay'))
+        updated: toInt(get('UpdatedDisplay')),
+        emphasis: toInt(get('ClockEmphasis'))
       };
     }
 

@@ -126,7 +126,8 @@
       "Badge1Notable",
       "Badge2Notable",
       "UpdatedDisplay",
-      "SinglePeekView"
+      "SinglePeekView",
+      "ClockEmphasis"
     ],
     "resources": {
       "media": [
