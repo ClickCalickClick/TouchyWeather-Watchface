@@ -46,10 +46,14 @@ const re = /dict_find\(iter,\s*MESSAGE_KEY_(\w+)\)\)\)\s*\{\s*(?:[^}]*?)(setting
 let m; while ((m = re.exec(comm))) parsed[m[1]] = m[2];
 // The page toggles go through a table-driven loop, not an inline dict_find.
 comm.replace(/\{\s*MESSAGE_KEY_(PageEnabled\w+),/g, (_, k) => { parsed[k] = 'settings_set_page_enabled'; return _; });
-// Two settings are deliberately phone-side only: PKJS consumes them into
+// Three settings are deliberately phone-side only: PKJS consumes them into
 // localStorage to build the weather request, and the watch never needs them.
+// WindSpeedUnit is the subtle one — the watch DOES render wind units, but from
+// `WindUnits`, an integer index.js derives from this picker. Auditing it as a
+// missing C handler is a false positive; the pairing is documented at the
+// WindUnits handler in comm.c.
 const pkjs = fs.readFileSync(path.join(ROOT, 'src/pkjs/index.js'), 'utf8');
-['TimeFormat', 'LocationOverride'].forEach(k => {
+['TimeFormat', 'LocationOverride', 'WindSpeedUnit'].forEach(k => {
   if (pkjs.includes('dict.' + k)) parsed[k] = '(phone-side: index.js localStorage)';
 });
 
