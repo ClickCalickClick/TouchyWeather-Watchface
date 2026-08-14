@@ -222,14 +222,15 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   clock_zone_update_time();
   prv_apply_ambient();
   comm_check_staleness();  // refetch if data is >30 min old
-  // Rain-alert chores ride this redraw instead of owning timers: the
-  // RAIN/UPDATED pill alternates once per minute, and a rain auto-peek that
-  // has had its dwell returns to the clock.
+  // The RAIN/UPDATED pill alternation rides this redraw rather than owning a
+  // timer — it was a repeating 4s AppTimer, ~900 wakeups/hour for the length of
+  // an alert, which is the one that actually mattered. (The rain auto-peek's
+  // return went to the tick too for one release; that saved a single one-shot
+  // wakeup per alert and cost 8x the dwell, so it is back on the idle timer.)
   if (weather_data_get()->rain_alert_min >= 0) {
     s_banner_alt = !s_banner_alt;
     clock_zone_toggle_status_alt();  // the resting face's own status row
   }
-  face_state_on_minute_tick();
   prv_mark_dirty();
 }
 

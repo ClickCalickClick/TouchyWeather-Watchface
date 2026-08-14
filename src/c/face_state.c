@@ -7,14 +7,19 @@
 #define PEEK_IDLE_MS 7000
 // Auto-rotate mode advances pages on this cadence (Phase 5).
 #define AUTO_ROTATE_MS 10000
-// Rain auto-peek returns to the clock on the minute tick, not on a timer of
-// its own — the peek APPEARS on a data-arrival redraw (which happens anyway)
-// and exits with the tick redraw, so a rain alert adds zero wakeups beyond the
-// at-rest one-per-minute. Data arrivals are usually tick-aligned (the
-// staleness refetch runs on the tick), so the dwell is naturally ~a minute;
-// the hold below stops a mid-minute arrival (Clay save, launch fetch) from
-// flashing the page for a second or two and yanking it away.
-#define RAIN_PEEK_MIN_HOLD_S 30
+// Rain auto-peek dwell — a little longer than a normal peek, then the shared
+// one-shot idle timer returns to the clock.
+//
+// v1.3.1 briefly returned this on the minute tick instead, to drop the timer.
+// That was a bad trade and is deliberately reverted: the saving was ONE wakeup
+// per rain-alert edge (the idle timer is one-shot and self-nulling, not the
+// repeating 4s banner flip that actually cost ~900/hour — that one stays on the
+// tick). In exchange the page sat on screen for 30-90s instead of 10s, measured
+// at 81s in one run, on a face the user did not ask to leave. An unwanted peek
+// that outstays its welcome by 8x is a worse bug than a wakeup every few hours,
+// and the battery rules already sanction this timer: "idle-return only in
+// PEEK/OVERLAY/UPDATE_NOTES", which is exactly what this is.
+#define RAIN_AUTOSHOW_MS 10000
 
 static FaceMode s_mode = FACE_CLOCK;
 static FacePage s_page = PAGE_HOURS;
@@ -26,12 +31,6 @@ static int s_deck_pos = -1;
 static AppTimer *s_idle_timer = NULL;
 static AppTimer *s_rotate_timer = NULL;
 static void (*s_mark_dirty)(void) = NULL;
-// True while a rain auto-peek is up and owes its return to the minute tick.
-// Cleared by any nudge (the user took the deck over) and by every path that
-// hands the mode to another owner, so the tick never yanks a page the user
-// navigated to.
-static bool s_rain_peek_until_tick = false;
-static time_t s_rain_peek_shown = 0;
 
 static void prv_redraw(void) {
   if (s_mark_dirty) s_mark_dirty();
@@ -113,7 +112,6 @@ void face_state_apply_mode(void) {
   if (want_rotate && !s_rotate_timer) {
     if (!prv_notes_up()) {
       prv_cancel_idle();
-      s_rain_peek_until_tick = false;  // reconfig supersedes a live auto-peek
       int first = prv_next_enabled(-1);
       s_page = (FacePage)first;
       s_mode = FACE_PEEK;
@@ -123,10 +121,7 @@ void face_state_apply_mode(void) {
   } else if (!want_rotate && s_rotate_timer) {
     app_timer_cancel(s_rotate_timer);
     s_rotate_timer = NULL;
-    if (!prv_notes_up()) {
-      s_rain_peek_until_tick = false;
-      s_mode = FACE_CLOCK;
-    }
+    if (!prv_notes_up()) s_mode = FACE_CLOCK;
     prv_redraw();
   }
 }
@@ -216,9 +211,6 @@ static void prv_nudge_single_peek(void) {
 
 void face_state_on_nudge(void) {
   anim_kick();  // every nudge re-wakes the decorative animation
-  // Any nudge means the user took over — the rain auto-peek's tick-return
-  // must not fire later and yank whatever they navigated to.
-  s_rain_peek_until_tick = false;
   // Dismiss the notes card BEFORE the gesture-mode switch. gesture.c delivers
   // every accepted tap here regardless of GestureMode — it is this switch that
   // drops them for AUTO_ROTATE/OFF — so intercepting above it is what makes the
@@ -256,35 +248,14 @@ void face_state_on_data(void) {
       settings_get_page_enabled(PAGE_HOURS)) {
     s_page = PAGE_HOURS;
     s_mode = FACE_PEEK;
-    // No idle timer: face_state_on_minute_tick returns to the clock. This
-    // redraw rides the data arrival, the exit rides the tick — the peek costs
-    // no wakeup the face wasn't already making.
-    s_rain_peek_until_tick = true;
-    s_rain_peek_shown = time(NULL);
+    prv_arm_idle(RAIN_AUTOSHOW_MS);
   }
 
   prv_redraw();
 }
 
-// Called from main.c's minute tick (which redraws regardless). Returns the
-// rain auto-peek to the clock once it has been up for the minimum hold —
-// possibly the second tick, when the alert arrived mid-minute. Only touches
-// the exact state the auto-peek set: if the user nudged onward or anything
-// else changed the mode, the flag is already clear or the mode check fails.
-void face_state_on_minute_tick(void) {
-  if (!s_rain_peek_until_tick) return;
-  if (s_mode != FACE_PEEK || s_page != PAGE_HOURS) {
-    s_rain_peek_until_tick = false;
-    return;
-  }
-  if (time(NULL) - s_rain_peek_shown < RAIN_PEEK_MIN_HOLD_S) return;
-  s_rain_peek_until_tick = false;
-  s_mode = FACE_CLOCK;
-}
-
 void face_state_reset_to_clock(void) {
   prv_cancel_idle();
-  s_rain_peek_until_tick = false;
   s_mode = FACE_CLOCK;
   prv_redraw();
 }
