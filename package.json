@@ -1,7 +1,7 @@
 {
   "name": "TouchyWeatherFace",
   "author": "MakeAwesomeHappen",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "keywords": [
     "pebble-watchface"
   ],
@@ -126,7 +126,8 @@
       "Badge1Notable",
       "Badge2Notable",
       "UpdatedDisplay",
-      "SinglePeekView"
+      "SinglePeekView",
+      "ClockEmphasis"
     ],
     "resources": {
       "media": [

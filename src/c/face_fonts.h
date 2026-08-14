@@ -43,6 +43,18 @@ GFont face_font_temp_tier(int tier);   // weather-row temperature
 GFont face_font_hilo_tier(int tier);   // weather-row hi/lo pair
 int   face_icon_size_tier(int tier);   // weather-row condition/moon icon edge
 
+// The tier the WEATHER ROW should be sized at, given the tier the clock is
+// being sized at. They are the same tier — except under CLOCK_EMPHASIS_LARGE,
+// where a promoted clock keeps its weather row at the BASE tier: the whole
+// point of that setting is that the weather row gets out of the clock's way.
+//
+// The three weather accessors above already route through this, so most call
+// sites need no change. clock_zone.c's prv_measure must apply it by hand to the
+// two weather-row heights it takes from #defines rather than from a font
+// (FZ_TEMP_INK_H, FZ_HILO_PITCH) — miss those and the row's reserved height
+// never shrinks, which makes the whole setting a no-op.
+int face_weather_tier(int tier);
+
 // The clock's VISIBLE ink height and top-side internal leading at a given tier,
 // mirroring face_font_clock_tier's branch structure (promoted XL / base, per
 // screen class). The flow reserves the ink height for the TIME row —

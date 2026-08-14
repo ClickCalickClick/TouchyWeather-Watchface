@@ -135,6 +135,10 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
     settings_set_single_peek_view((SinglePeekView)prv_tuple_int(t));
     config_changed = true;
   }
+  if ((t = dict_find(iter, MESSAGE_KEY_ClockEmphasis))) {
+    settings_set_clock_emphasis((ClockEmphasis)prv_tuple_int(t));
+    config_changed = true;
+  }
   if ((t = dict_find(iter, MESSAGE_KEY_UseDewPoint))) {
     bool on = prv_tuple_bool(t);
     settings_set_use_dew_point(on);

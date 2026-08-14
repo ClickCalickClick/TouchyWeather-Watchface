@@ -1,5 +1,6 @@
 #include "face_fonts.h"
 #include "ui.h"
+#include "settings.h"
 
 // See face_fonts.h for the policy. Each accessor: the enlarged path on the
 // large screen classes, then a fall-through to the shared ui_font_* on the
@@ -155,7 +156,19 @@ GFont face_font_clock_tier(int tier) {
 #endif
 }
 
+int face_weather_tier(int tier) {
+  // Only the promoted tier has anything to give back — at base the weather row
+  // is already as small as this class supports, so "Large clock" is a no-op
+  // there and the default path below is bit-for-bit untouched.
+  if (tier >= FACE_TIER_PROMOTED &&
+      settings_get_clock_emphasis() == CLOCK_EMPHASIS_LARGE) {
+    return FACE_TIER_BASE;
+  }
+  return tier;
+}
+
 GFont face_font_temp_tier(int tier) {
+  tier = face_weather_tier(tier);
   if (tier >= FACE_TIER_PROMOTED) {
 #if defined(UI_SCREEN_SMALL_ROUND)
     // Chalk's promoted temp stops at BITHAM_30 — LECO_42 alongside a promoted
@@ -173,6 +186,7 @@ GFont face_font_temp_tier(int tier) {
 }
 
 GFont face_font_hilo_tier(int tier) {
+  tier = face_weather_tier(tier);
 #if defined(UI_SCREEN_SMALL_ROUND)
   // The hi/lo pair is two stacked lines, so it drives the weather row's height
   // more than the icon or the temp do. Chalk's 180px circle can't hold the full
@@ -189,7 +203,11 @@ GFont face_font_hilo_tier(int tier) {
 }
 
 int face_icon_size_tier(int tier) {
-  const bool up = (tier >= FACE_TIER_PROMOTED);
+  // The icon is the tallest thing in the weather row at the promoted tier on
+  // every screen class (60/58/44/38 against a temp of 46/46/38/36), so it —
+  // not the temperature — is what actually sets the row's height. Demoting the
+  // fonts without demoting this would leave the row exactly as tall as before.
+  const bool up = (face_weather_tier(tier) >= FACE_TIER_PROMOTED);
 #if defined(UI_SCREEN_LARGE_ROUND)
   return up ? 60 : 52;
 #elif defined(UI_SCREEN_LARGE_RECT)

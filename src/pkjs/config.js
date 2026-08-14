@@ -139,6 +139,17 @@ module.exports = [
         "defaultValue": false
       },
       {
+        "type": "radiogroup",
+        "messageKey": "ClockEmphasis",
+        "label": "Clock size",
+        "description": "Balanced gives the time and the temperature equal weight. Large clock shrinks the weather row so the time can grow — it only takes effect where the bigger clock genuinely fits, so on a full face you may need to turn a slot or the 'last updated' pill off to see it.",
+        "defaultValue": "0",
+        "options": [
+          { "label": "Balanced", "value": "0" },
+          { "label": "Large clock", "value": "1" }
+        ]
+      },
+      {
         "type": "select",
         "messageKey": "UpdatedDisplay",
         "label": "Last updated",

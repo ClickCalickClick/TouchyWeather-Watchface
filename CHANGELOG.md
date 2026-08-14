@@ -26,6 +26,11 @@ to drop entries.
 
 Bump `package.json`'s `version` to match the top entry when you add one.
 
+## 1.4.0
+
+- New: Clock size setting.
+- Large clock grows the time.
+
 ## 1.3.1
 
 - Settings now always stick.
