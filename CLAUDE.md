@@ -215,14 +215,20 @@ non-setting keys there, not at the top of the packed low range.
 
 ## Battery rules (enforce when adding timers)
 
-At rest — even during a rain alert — exactly one wakeup per minute (tick).
-Every AppTimer must be conditional and self-cancelling: anim 10Hz only inside
-the 8s post-`anim_kick()` window; idle-return only in PEEK/OVERLAY/
-UPDATE_NOTES; rotate 10s only in AUTO_ROTATE mode. Rain-alert chrome owns NO
-timer: the RAIN/UPDATED pill alternation flips on the minute tick (it was a 4s
-AppTimer originally — ~900 wakeups/hour for the length of an alert), and the
-rain auto-peek enters on the data-arrival redraw and exits via
-`face_state_on_minute_tick` (≥30s hold), so an alert adds zero wakeups.
+At rest the face wakes once per minute (tick). Every AppTimer must be
+conditional and self-cancelling: anim 10Hz only inside the 8s post-`anim_kick()`
+window; idle-return only in PEEK/OVERLAY/UPDATE_NOTES; rotate 10s only in
+AUTO_ROTATE mode. The RAIN/UPDATED pill alternation owns NO timer — it flips on
+the minute tick, having originally been a repeating 4s AppTimer at ~900
+wakeups/hour for the length of an alert.
+
+**Weigh a timer by its repeat rate, not its existence.** v1.3.1 also moved the
+rain auto-peek's return onto the tick; that half was reverted. The idle-return
+timer is ONE-SHOT and self-nulling, so it cost one wakeup per rain-alert edge
+(~0.3% of a day's wakeups), while the tick-return left an unrequested page on
+screen for 30-90s instead of 10s — measured at 81s on emery, then 10s again
+after the revert. The repeating banner flip was the real offender; the one-shot
+peek return was always within the rules above and is back on `prv_arm_idle`.
 
 The update-notes card adds NO timer — it reuses the idle-return one (10s),
 which is why its sun is static. In AUTO_ROTATE only, the rotate and idle timers
